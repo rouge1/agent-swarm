@@ -64,9 +64,10 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 /* the stack: one in-flow front card (which sets the stack's height) plus absolutely-positioned
    back cards layered behind it, each offset sideways by a fraction of its own (shared) width */
 .wheel-rail { position: relative; overflow: hidden; display: flex; justify-content: center; container-type: inline-size; }
-/* --w is the card width; the side room left over, (100cqw - --w) / 2, is shared out between the back
+/* --w is the card width: 720px, or wider on big windows (keeping ~280px a side for the back cards);
+   the side room left over, (100cqw - --w) / 2, is shared out between the back
    cards so each layer peeks past the one in front of it: [1 [2 [3] 4] 5] */
-.wheel-card { --w: min(720px, 100cqw - 28px); position: absolute; top: 0; left: 0; right: 0; margin-inline: auto; width: var(--w); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); text-align: left; padding: 22px; display: grid; gap: 10px; box-shadow: 0 8px 26px -18px rgba(0, 0, 0, .4); transition: transform .35s cubic-bezier(.22, .8, .28, 1), border-color .2s; }
+.wheel-card { --w: max(min(720px, 100cqw - 28px), min(100cqw - 560px, 1600px)); position: absolute; top: 0; left: 0; right: 0; margin-inline: auto; width: var(--w); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); text-align: left; padding: 22px; display: grid; gap: 10px; box-shadow: 0 8px 26px -18px rgba(0, 0, 0, .4); transition: transform .35s cubic-bezier(.22, .8, .28, 1), border-color .2s; }
 .wheel-card.front { position: relative; z-index: 20; }
 .wheel-card.back { cursor: pointer; font: inherit; color: inherit; transform: translateX(calc(var(--dir) * (var(--w) * (1 - var(--s)) / 2 + var(--peek) * (100cqw - var(--w)) / 2))) scale(var(--s)); }
 /* back cards stay opaque (so the card in front hides what's behind it) and are dimmed by a veil */

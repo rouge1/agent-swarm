@@ -74,7 +74,8 @@ It reads its data from whichever of these it finds first:
 - **Replay:** `swarm.py export` writes a single offline HTML file with every event embedded, ready to share.
 - **claude.ai Artifact** (optional), backed by the Artifact database.
 - **Local:** `meta.json` and `events.json` in the same folder, polled every 5 seconds. Serve the folder on
-  this machine only, for example `python3 -m http.server 8765 --bind 127.0.0.1`.
+  this machine only, for example `python3 -m http.server 8765 --bind 127.0.0.1`. Something has to rewrite
+  the two files on a timer; `swarm.py` doesn't do that yet (it's on the roadmap).
 
 `references/dashboard.md` has the details.
 
