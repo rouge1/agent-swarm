@@ -45,7 +45,8 @@ OpenCode runs cost cents.
 | `swarm.py health` | In-flight runs and how long since each log last grew; HUNG after 600 s |
 | `swarm.py cost [--phase p]` | OpenCode and Claude cost per model |
 | `swarm.py claude` | Tally Claude usage from transcripts (run before dashboard pushes) |
-| `swarm.py push` | Print the dashboard database batch (see references/dashboard.md) |
+| `swarm.py site` | Rewrite the local board folder now (`watch` does this on a timer) |
+| `swarm.py push` | Print the claude.ai dashboard database batch, if that board is used (see references/dashboard.md) |
 | `swarm.py sync` | Copy records (events, ledger, prompts, specs, screenshots) into the repo |
 
 To run workers in parallel: `nohup python3 swarm.py run ... > data/logs/<name>.out 2>&1 &`. Stagger launches by
@@ -103,7 +104,8 @@ To find a session for a fix round:
   test suite and lint must pass on main.
 - `swarm.py sync`, then commit ("records: sync ops records").
 - Push only if pre-approved.
-- `swarm.py phase <phase> done`, `swarm.py claude`, `swarm.py push`, then apply the dashboard batch.
+- `swarm.py phase <phase> done`, `swarm.py claude`. The local board picks both up on its next pass; only for a
+  claude.ai board, also `swarm.py push` and apply the batch.
 - Remove the review and integration worktrees (`git worktree remove --force <path>`). Keep the task worktrees
   until the planner says otherwise.
 

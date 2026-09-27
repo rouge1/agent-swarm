@@ -43,16 +43,24 @@ claude.ai `db` capability, or -- for a standalone deployment with no database --
 `./meta.json` and `./events.json` every 5 seconds (silently skipped if those 404). Nothing else is fetched.
 
 ## Standalone live board (no claude.ai)
-Put three files in one folder and serve it on this machine only:
+
+    python3 scripts/swarm.py watch --serve 8765     # then open http://127.0.0.1:8765/
+
+`watch` does one pass every 30 seconds (`--every N`): the Claude transcript tally (skipped when
+`claude.session_dir` doesn't exist, or with `--no-claude`), then the board folder, `<ops>/out/site/` by default
+(`--out DIR`). `--serve PORT` also serves that folder from the same process, bound to 127.0.0.1 (`--bind` to
+change it; keep it on this machine unless the user asks otherwise). `--once` does a single pass and exits;
+`swarm.py site` writes the folder without the tally.
+
+The folder holds three files:
 - `index.html`: the page, wrapped in its own `<!doctype html><head>` with `<meta charset="utf-8">` and a
   viewport meta (the page is written for the Artifact skeleton, which normally supplies both; without the
   charset every `·`, `‹` and `✓` turns to mojibake)
 - `meta.json`: the same body `push` writes to `project/meta`
 - `events.json`: the whole event log as one JSON array
 
-Refresh the two JSON files on a timer (write to a temp file, then rename, so the page never reads half a file)
-and serve with `python3 -m http.server <port> --bind 127.0.0.1 --directory <folder>`. The whichhf build does
-this with a small scribe loop (activity scan, Claude tally, then those three files every 30 s).
+Each file is written to a temp file and renamed, so the page never reads half a file. Without `--serve`, any
+static server works: `python3 -m http.server 8765 --bind 127.0.0.1 --directory <ops>/out/site`.
 
 ## Live dashboard as a claude.ai Artifact (optional)
 1. Publish `assets/dashboard.html` with the Artifact tool, with capabilities

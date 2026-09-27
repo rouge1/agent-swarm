@@ -74,9 +74,9 @@ a first run: it explains why the process looks the way it does and where the mon
 It reads its data from whichever of these it finds first:
 - **Replay:** `swarm.py export` writes a single offline HTML file with every event embedded, ready to share.
 - **claude.ai Artifact** (optional), backed by the Artifact database.
-- **Local:** `meta.json` and `events.json` in the same folder, polled every 5 seconds. Serve the folder on
-  this machine only, for example `python3 -m http.server 8765 --bind 127.0.0.1`. Something has to rewrite
-  the two files on a timer; `swarm.py` doesn't do that yet (it's on the roadmap).
+- **Local:** `meta.json` and `events.json` in the same folder, polled every 5 seconds.
+  `swarm.py watch --serve 8765` rewrites the folder (`out/site/`) every 30 seconds and serves it on this
+  machine only, at http://127.0.0.1:8765/.
 
 `references/dashboard.md` has the details.
 
@@ -87,7 +87,7 @@ SKILL.md               the orchestrator's instructions (start here)
 swarm.toml.example     config template: paths, forbidden dirs, models and drivers, phases, prices
 examples/              a filled-in config (paths are placeholders)
 scripts/swarm.py       ops CLI: init, wt, run, task, note, review, tests, score, crew, phase,
-                       health, cost, status, claude, push, export, sync, recover
+                       health, cost, status, claude, site, watch, push, export, sync, recover
 scripts/screenshot.py  Playwright screenshots, video and console errors from a JSON step list
 scripts/tests/         driver tests (a fake Grok CLI stands in for the real one)
 assets/dashboard.html  live dashboard and replay page

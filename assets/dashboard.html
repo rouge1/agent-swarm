@@ -887,7 +887,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   setInterval(() => { if (st.mode === "live") render(); }, 1000);
 
   // one function, first source that works: embedded replay, then the claude.ai db capability, then
-  // (standalone, e.g. `scribe.py watch` + a local server) same-origin polling of ./meta.json +
+  // (standalone, e.g. `swarm.py watch --serve`) same-origin polling of ./meta.json +
   // ./events.json. Nothing else fetched.
   async function initData() {
     if (window.__SWARM_EMBED__) {

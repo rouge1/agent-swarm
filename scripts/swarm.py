@@ -777,6 +777,86 @@ def cmd_export(a):
     print(out)
 
 
+# ---------------------------------------------------------------- standalone board
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """Write via a temp file and rename, so a reader (the polling page) never sees half a file."""
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
+# The page is written for the claude.ai Artifact skeleton, which supplies the document head. Served on
+# its own it needs one, or the browser guesses the encoding and every non-ASCII glyph breaks.
+SITE_HEAD = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
+             '<link rel="icon" href="data:,">'
+             '<style>[hidden]{display:none!important}img{max-width:100%}</style>'
+             '</head><body style="margin:0">')
+
+
+def write_site(site: Path) -> None:
+    """The standalone board: index.html plus the meta.json / events.json it polls every 5 s."""
+    site.mkdir(parents=True, exist_ok=True)
+    _write_atomic(site / "meta.json", json.dumps(build_meta(), separators=(",", ":")))
+    _write_atomic(site / "events.json", json.dumps(load_events(), separators=(",", ":")))
+    page = (SKILL_DIR / "assets" / "dashboard.html").read_text(encoding="utf-8")
+    title = re.match(r"\s*(<title>.*?</title>)", page, re.S)  # the page's title belongs in the head
+    head = SITE_HEAD.replace("</head>", (title.group(1) if title else "") + "</head>")
+    _write_atomic(site / "index.html", head + page[title.end():] if title else head + page)
+
+
+def _site_dir(a) -> Path:
+    return Path(a.out).expanduser().resolve() if a.out else OUT / "site"
+
+
+def cmd_site(a):
+    site = _site_dir(a)
+    write_site(site)
+    print(f"site written to {site}")
+
+
+def _serve(site: Path, port: int, bind: str) -> None:
+    """Serve the board folder from a daemon thread (stdlib only, no request logging)."""
+    import functools
+    import threading
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    class Quiet(SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    httpd = ThreadingHTTPServer((bind, port), functools.partial(Quiet, directory=str(site)))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    print(f"serving {site} at http://{bind}:{httpd.server_port}/", flush=True)
+
+
+def watch_pass(site: Path, tally: bool) -> None:
+    """One refresh of the board: Claude tally (when there is a session to read), then the site files."""
+    if tally and SESSION_DIR.is_dir():
+        claude_tally(CLAUDE_SESSION)
+    write_site(site)
+
+
+def cmd_watch(a):
+    """Keep the standalone board current: one pass every --every seconds, optionally serving it."""
+    site = _site_dir(a)
+    if a.once:
+        watch_pass(site, not a.no_claude)
+        print(f"site written to {site}")
+        return
+    site.mkdir(parents=True, exist_ok=True)
+    if a.serve is not None:
+        _serve(site, a.serve, a.bind)
+    while True:
+        try:
+            watch_pass(site, not a.no_claude)
+        except Exception as exc:  # keep watching; one bad pass must not stop the board
+            print(f"watch: {exc}", file=sys.stderr, flush=True)
+        time.sleep(a.every)
+
+
 # ---------------------------------------------------------------- sync
 
 
@@ -839,11 +919,12 @@ def _read_transcript(path: Path) -> list[dict]:
     return list(msgs.values())
 
 
-def cmd_claude(a):
-    """Tally Claude (orchestrator + subagent) tokens and list-price cost per phase and model; log changes."""
+def claude_tally(session: str) -> tuple[dict, int] | None:
+    """Tally Claude (orchestrator + subagent) tokens and list-price cost per phase and model; log the
+    tallies that changed. Returns (per (phase, role, model) totals, number logged), or None when there
+    is no session to read and no event yet to anchor an unscoped tally."""
     from datetime import datetime
 
-    session = a.session if a.session is not None else CLAUDE_SESSION
     if session:
         sources = [("orchestrator", SESSION_DIR / f"{session}.jsonl")]
         sources += [("reviewer", f) for f in sorted((SESSION_DIR / session / "subagents").glob("agent-*.jsonl"))]
@@ -851,8 +932,7 @@ def cmd_claude(a):
         # no session configured: tally every transcript under session_dir touched since our first event
         events0 = load_events()
         if not events0:
-            sys.exit("claude: no events yet in this ops dir to anchor an unscoped tally; "
-                     "pass --session, or set claude.session in swarm.toml")
+            return None
         since = events0[0]["t"] / 1000.0
         top = [f for f in SESSION_DIR.glob("*.jsonl") if f.stat().st_mtime >= since]
         subs = [f for f in SESSION_DIR.glob("*/subagents/agent-*.jsonl") if f.stat().st_mtime >= since]
@@ -902,7 +982,16 @@ def cmd_claude(a):
         if not prev or prev["messages"] != ev["messages"] or prev["output"] != ev["output"]:
             emit(ev)
             changed += 1
+    return agg, changed
 
+
+def cmd_claude(a):
+    """Tally Claude usage (see claude_tally) and print totals per role and model."""
+    res = claude_tally(a.session if a.session is not None else CLAUDE_SESSION)
+    if res is None:
+        sys.exit("claude: no events yet in this ops dir to anchor an unscoped tally; "
+                 "pass --session, or set claude.session in swarm.toml")
+    agg, changed = res
     tot = defaultdict(lambda: defaultdict(float))
     for (ph, role, model), r in agg.items():
         for k, v in r.items():
@@ -1003,6 +1092,19 @@ def build_parser() -> argparse.ArgumentParser:
     default_out = str(OUT / f"{_slugify(CFG.get('project', {}).get('name', 'swarm'))}-replay.html") if OUT else None
     s.add_argument("--out", default=default_out, required=default_out is None)
     s.set_defaults(fn=cmd_export)
+
+    s = sub.add_parser("site", help="write the standalone board (index.html, meta.json, events.json)")
+    s.add_argument("--out", help="board folder (default: <ops>/out/site)")
+    s.set_defaults(fn=cmd_site)
+
+    s = sub.add_parser("watch", help="refresh the standalone board on a timer, optionally serving it")
+    s.add_argument("--every", type=float, default=30, help="seconds between passes (default 30)")
+    s.add_argument("--out", help="board folder (default: <ops>/out/site)")
+    s.add_argument("--serve", type=int, metavar="PORT", help="also serve the folder on this port")
+    s.add_argument("--bind", default="127.0.0.1", help="address for --serve (default 127.0.0.1, this machine only)")
+    s.add_argument("--no-claude", action="store_true", help="skip the Claude transcript tally")
+    s.add_argument("--once", action="store_true", help="one pass, then exit")
+    s.set_defaults(fn=cmd_watch)
 
     s = sub.add_parser("sync", help="copy events/ledger/prompts/specs/shots into <repo>/<records_dir>")
     s.set_defaults(fn=cmd_sync)

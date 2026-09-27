@@ -55,7 +55,7 @@ agent-swarm/
   swarm.toml.example           config template (commented): paths, forbidden dirs, models and drivers, phases, prices
   examples/textstats.swarm.toml  a filled-in config from a live test project (paths are placeholders)
   scripts/swarm.py             ops CLI (stdlib only): init, wt, run, task, note, review, tests, score, crew,
-                               phase, health, cost, status, claude, push, export, sync, recover
+                               phase, health, cost, status, claude, site, watch, push, export, sync, recover
   scripts/screenshot.py        Playwright screenshots, video and console errors from a JSON step list
   scripts/tests/               driver tests (a fake Grok CLI stands in for the real one)
   assets/dashboard.html        live dashboard and replay page (local, embedded replay, or claude.ai Artifact)
@@ -97,7 +97,8 @@ agent-swarm/
    - the first acceptance tests
 
    Check your own tests against a private reference implementation kept outside the repo. Commit on `main`.
-5. **Dashboard:** start the local board (see below) so the user can watch from the first phase.
+5. **Dashboard:** start the local board (`swarm.py watch --serve 8765`, see below) so the user can watch from
+   the first phase.
 
 ## Running a phase
 
@@ -125,11 +126,11 @@ In a bake-off, read both diffs before picking a winner: hidden acceptance tests 
 ## Dashboard
 
 `assets/dashboard.html` shows the phases as an overlapping card stack, the task board, worker lanes, spend and
-the activity feed, live or as a replay. It needs no service: a scribe (a cheap agent, or just a timer) writes
-`meta.json` and `events.json` next to the page, and the page polls them every 5 seconds. Serve the folder on this
-machine only (`python3 -m http.server <port> --bind 127.0.0.1`). `swarm.py` has no command that writes those two
-files yet; `references/dashboard.md` says what goes in them. `swarm.py export` writes a single offline replay
-file to share, and a claude.ai Artifact board is also supported. See `references/dashboard.md`.
+the activity feed, live or as a replay. It needs no service: `swarm.py watch --serve 8765` rewrites the page,
+`meta.json` and `events.json` in `out/site/` every 30 seconds and serves that folder on this machine only
+(127.0.0.1); the page polls the two files every 5 seconds. `swarm.py site` writes the folder once. `swarm.py
+export` writes a single offline replay file to share, and a claude.ai Artifact board is also supported. See
+`references/dashboard.md`.
 
 ## Hard rules
 

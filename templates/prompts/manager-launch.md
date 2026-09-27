@@ -12,6 +12,7 @@ Plan: <workstreams, which get bake-offs, which run in parallel, the order of dep
 Pre-approved outward actions: <for example "git push origin main after the phase merge" | "none: stop before
 pushing and report">. Nothing else outward.
 
-Dashboard: <"push with ArtifactData to <url> at milestones" | "none">.
+Dashboard: <"local board, already refreshed by `swarm.py watch`: nothing to do" | "push with ArtifactData to
+<url> at milestones" | "none">.
 
 FINAL REPORT: as in the runbook's "Final report" section, under 250 words.
