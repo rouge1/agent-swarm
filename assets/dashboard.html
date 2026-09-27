@@ -1,0 +1,817 @@
+<title>Swarm Build Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #eef1f6; --panel: #ffffff; --panel-2: #f6f8fb; --ink: #121a2e; --muted: #5b6479; --line: #d5dbe6;
+  --accent: #2f5bea; --bug: #d0363c; --ok: #1d8f4e; --warn: #b87900;
+  --series-1: #6a4ef0; --series-2: #0a8d86; --series-3: #d85d14; --series-4: #b23a6b; --series-5: #2f7d32; --series-6: #ad8b0f; --orchestrator: #3b4a6b; --reviewer: #a23e8c;
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0c111e; --panel: #141b2c; --panel-2: #10172a; --ink: #e6eaf3; --muted: #95a0b8; --line: #27314b;
+    --accent: #7390ff; --bug: #ff6b70; --ok: #3dd68c; --warn: #f2b53a;
+    --series-1: #a18cff; --series-2: #2ccfc4; --series-3: #ff8a47; --series-4: #ef7fb0; --series-5: #63c76a; --series-6: #e0bb3f; --orchestrator: #b3bfdc; --reviewer: #e07bc9;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c111e; --panel: #141b2c; --panel-2: #10172a; --ink: #e6eaf3; --muted: #95a0b8; --line: #27314b;
+  --accent: #7390ff; --bug: #ff6b70; --ok: #3dd68c; --warn: #f2b53a;
+  --series-1: #a18cff; --series-2: #2ccfc4; --series-3: #ff8a47; --series-4: #ef7fb0; --series-5: #63c76a; --series-6: #e0bb3f; --orchestrator: #b3bfdc; --reviewer: #e07bc9;
+}
+* { box-sizing: border-box; }
+/* the claude.ai Artifact skeleton normally supplies this; without it (standalone/self-served),
+   a `display` rule on a [hidden] element (e.g. .spend-detail) would otherwise win over the attribute */
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); padding-inline: 16px; padding-block: 0 110px; }
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+/* a row's content (e.g. the wheel rail, sized to its own un-clipped max-content) must never force
+   the single grid column wider than the viewport -- overflow:hidden on a descendant doesn't stop its
+   intrinsic size from propagating up through flex/grid ancestors, so every row is capped explicitly */
+.wrap > * { min-width: 0; }
+h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; }
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font: 600 11px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-block: 18px 4px; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand h1 { font-size: 26px; letter-spacing: .01em; }
+.brand h1 b { color: var(--accent); font-weight: 700; }
+.brand .sub { color: var(--muted); font-size: 13px; }
+.modes { display: flex; align-items: center; gap: 10px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.seg button { border: 0; background: transparent; padding: 6px 12px; font: 600 12px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.livedot { width: 8px; height: 8px; border-radius: 50%; background: var(--bug); display: inline-block; margin-right: 6px; vertical-align: 1px; }
+.is-live .livedot { animation: pulse 1.4s ease-in-out infinite; }
+.clock { color: var(--muted); font-size: 12px; }
+
+/* phase wheel */
+.wheel-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.wheel-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wheel-nav { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); font: 600 16px/1 var(--display); display: flex; align-items: center; justify-content: center; }
+.wheel-nav:hover { border-color: var(--accent); color: var(--accent); }
+.wheel-track { flex: 1; min-width: 0; overflow: hidden; touch-action: pan-y; }
+/* the stack: one in-flow front card (which sets the stack's height) plus absolutely-positioned
+   back cards layered behind it, each offset sideways by a fraction of its own (shared) width */
+.wheel-rail { position: relative; overflow: hidden; display: flex; justify-content: center; container-type: inline-size; }
+/* --w is the card width; the side room left over, (100cqw - --w) / 2, is shared out between the back
+   cards so each layer peeks past the one in front of it: [1 [2 [3] 4] 5] */
+.wheel-card { --w: min(720px, 100cqw - 28px); position: absolute; top: 0; left: 0; right: 0; margin-inline: auto; width: var(--w); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); text-align: left; padding: 22px; display: grid; gap: 10px; box-shadow: 0 8px 26px -18px rgba(0, 0, 0, .4); transition: transform .35s cubic-bezier(.22, .8, .28, 1), border-color .2s; }
+.wheel-card.front { position: relative; z-index: 20; }
+.wheel-card.back { cursor: pointer; font: inherit; color: inherit; transform: translateX(calc(var(--dir) * (var(--w) * (1 - var(--s)) / 2 + var(--peek) * (100cqw - var(--w)) / 2))) scale(var(--s)); }
+/* back cards stay opaque (so the card in front hides what's behind it) and are dimmed by a veil */
+.wheel-card.back::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; background: var(--bg); opacity: var(--veil); pointer-events: none; transition: opacity .2s; }
+.wheel-card.back:hover::after { opacity: calc(var(--veil) / 2); }
+.wheel-card.back:hover { border-color: var(--accent); }
+.wheel-card.active { border-color: var(--accent); }
+.wheel-card h2 { font-size: 26px; line-height: 1.15; }
+.wheel-card h2 span { color: var(--accent); }
+.wheel-card p { margin: 0; color: var(--muted); max-width: 70ch; }
+.wheel-card .exit { font-size: 13px; }
+.wheel-card .exit b { color: var(--ink); font-weight: 600; }
+.phase-stats { display: flex; flex-wrap: wrap; gap: 18px; row-gap: 8px; }
+.phase-stats div { display: grid; gap: 2px; text-align: right; }
+.phase-stats .v { font: 500 18px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.back-to-current { justify-self: center; border: 1px dashed var(--line); background: var(--panel); border-radius: 999px; padding: 6px 14px; font: 600 12px/1 var(--body); color: var(--accent); }
+.spend-toggle { justify-self: start; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 5px 10px; font: 600 12px/1 var(--body); color: var(--ink); }
+.spend-toggle:hover { border-color: var(--accent); }
+.spend-detail { display: grid; gap: 6px; }
+.scorecard { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.scorecard h3 { font-size: 14px; }
+
+/* phase map */
+.phasemap-wrap { position: relative; }
+.phasemap { display: grid; gap: 4px; justify-content: center; }
+.pm-cell { border: 1px solid var(--line); background: var(--panel); border-radius: 4px; height: 22px; width: 26px; display: flex; align-items: center; justify-content: center; font: 600 10px/1 var(--mono); color: var(--muted); }
+.pm-cell.done { background: var(--panel-2); color: var(--ok); }
+.pm-cell.active { color: var(--accent); font-weight: 700; border-color: var(--accent); }
+.pm-cell.pm-focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+.phasemap-window { position: absolute; top: -4px; bottom: -4px; border: 2px solid var(--accent); border-radius: 6px; pointer-events: none; transition: left .35s, width .35s; }
+
+/* crew lanes */
+.crew { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.lane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; align-content: start; position: relative; }
+.lane::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; border-radius: 12px 0 0 12px; background: var(--c); opacity: .35; }
+.lane.busy::before { opacity: 1; }
+.lane .who { display: flex; align-items: center; gap: 8px; }
+.lane .who h3 { font-size: 15px; }
+.lane .role { font-size: 11px; color: var(--muted); line-height: 1.3; }
+.lane .doing { min-height: 40px; font-size: 13px; line-height: 1.35; }
+.lane .doing .idle { color: var(--muted); }
+.lane .meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+.sig { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
+.busy .sig { animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+
+/* panels + board */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; }
+.panel-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.panel-h h2 { font-size: 17px; }
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.col { display: grid; gap: 8px; align-content: start; min-height: 80px; }
+.col > .eyebrow { display: flex; justify-content: space-between; padding: 0 2px 4px; border-bottom: 1px solid var(--line); }
+.card { border: 1px solid var(--line); border-left: 4px solid var(--c, var(--line)); background: var(--panel-2); border-radius: 8px; padding: 9px 10px; display: grid; gap: 5px; font-size: 12.5px; }
+.card .ttl { font-weight: 600; font-size: 13px; line-height: 1.25; word-break: break-word; }
+.card .row { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 11.5px; }
+.card.dropped { opacity: .6; }
+.card.failed { border-color: var(--bug); }
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 7px 1px 5px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); color: var(--c); background: color-mix(in srgb, var(--c) 10%, transparent); white-space: nowrap; }
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+.pill { font: 600 10px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; padding: 3px 6px; border-radius: 4px; background: color-mix(in srgb, var(--s) 15%, transparent); color: var(--s); }
+.empty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
+
+/* spend table */
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { font: 600 10.5px/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+th:first-child, td:first-child { text-align: left; }
+td.num { font-family: var(--mono); }
+tr.total td { font-weight: 600; border-bottom: 0; }
+tr.win td:first-child::after { content: "WINNER"; margin-left: 8px; font: 700 9.5px/1 var(--display); letter-spacing: .1em; color: var(--ok); }
+
+/* feed */
+.feed { display: grid; gap: 0; max-height: 420px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.feed li { display: grid; grid-template-columns: 62px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.feed li:last-child { border-bottom: 0; }
+.feed time { color: var(--muted); font: 11.5px var(--mono); padding-top: 1px; }
+.feed .fresh { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 18%, transparent); } }
+
+/* replay bar */
+.player { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--line); z-index: 5; }
+.player .in { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; }
+.pbtn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 10px; font: 600 12px/1 var(--display); letter-spacing: .05em; }
+.pbtn.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 76px; }
+.ctrls { display: flex; gap: 6px; align-items: center; }
+.track { position: relative; display: grid; gap: 4px; }
+.track input { width: 100%; accent-color: var(--accent); margin: 0; }
+.marks { position: relative; height: 12px; font: 600 9.5px/1 var(--mono); color: var(--muted); }
+.marks span { position: absolute; transform: translateX(-50%); top: 0; }
+.marks span::before { content: ""; position: absolute; left: 50%; top: -9px; width: 1px; height: 7px; background: var(--muted); }
+.ptime { font-size: 12px; color: var(--muted); text-align: right; min-width: 120px; }
+.keys { font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: center; padding-top: 6px; }
+kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--panel-2); color: var(--ink); }
+.banner { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 14px; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 720px) {
+  .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wheel-card { padding: 16px; }
+  .wheel-nav { display: none; } /* swipe, the peeking card and the phase map below all move the stack */
+  .player .in { grid-template-columns: 1fr; gap: 8px; }
+  .ptime { text-align: left; }
+  .keys { display: none; }
+}
+@media (max-width: 440px) { .board { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap" id="app">
+  <header class="top">
+    <div class="brand">
+      <h1 id="brandTitle">Swarm <b>Ops</b></h1>
+      <span class="sub">Build progress across phases, agents and runs</span>
+    </div>
+    <div class="modes">
+      <span class="clock mono" id="clock"></span>
+      <div class="seg" role="group" aria-label="View mode">
+        <button id="m-live" aria-pressed="true"><span class="livedot"></span>Live</button>
+        <button id="m-replay" aria-pressed="false">Replay</button>
+      </div>
+    </div>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+
+  <section class="wheel-wrap" aria-label="Phases">
+    <div class="wheel-head">
+      <button class="wheel-nav" id="wheelPrev" aria-label="Previous phase" title="Previous phase ([)">‹</button>
+      <div class="wheel-track" id="wheelTrack"><div class="wheel-rail" id="wheelRail"></div></div>
+      <button class="wheel-nav" id="wheelNext" aria-label="Next phase" title="Next phase (])">›</button>
+    </div>
+    <button class="back-to-current" id="backCurrent" hidden>⟲ Back to current phase</button>
+  </section>
+
+  <div class="phasemap-wrap">
+    <nav class="phasemap" id="phasemap" aria-label="All phases"></nav>
+    <div class="phasemap-window" id="phasemapWindow"></div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-h"><h2 id="boardTitle">Task board</h2></div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Workers</h2></div>
+    <div class="crew" id="crew" aria-label="Crew"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Spend</h2></div>
+    <div class="tbl-wrap"><table id="spend"></table></div>
+    <div class="eyebrow" style="letter-spacing:.04em;text-transform:none;font-family:var(--body);font-weight:400">Wall = clock time of the run. Non-Claude workers report cost as billed by their own CLI. Claude cost (the orchestrator and any Claude-driven lane) is the API list-price equivalent of this session's transcripts (tokens include cache reads); on a Claude subscription it is not billed per token.</div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Activity</h2><span class="eyebrow" id="feedCount"></span></div>
+    <ul class="feed" id="feed"></ul>
+  </section>
+</div>
+
+<div class="player" id="player">
+  <div class="in">
+    <div class="ctrls">
+      <button class="pbtn primary" id="play">▶ Replay</button>
+      <div class="seg" role="group" aria-label="Replay speed" id="speeds">
+        <button data-speed="showcase" aria-pressed="true">Showcase</button>
+        <button data-speed="x60" aria-pressed="false">60×</button>
+        <button data-speed="x600" aria-pressed="false">600×</button>
+      </div>
+    </div>
+    <div class="track">
+      <input type="range" id="scrub" min="0" max="1000" value="1000" step="1" aria-label="Replay position">
+      <div class="marks" id="marks"></div>
+    </div>
+    <div class="ptime mono" id="ptime"></div>
+  </div>
+  <div class="keys"><span><kbd>Space</kbd> play / pause</span><span><kbd>←</kbd><kbd>→</kbd> step events</span><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> speed</span><span><kbd>Home</kbd><kbd>End</kbd> jump</span><span><kbd>[</kbd><kbd>]</kbd> phase</span><span><kbd>R</kbd> replay from start</span><span><kbd>L</kbd> live</span></div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const CREW_KEYS = new Set(["orchestrator", "reviewer"]);
+  // orchestrator lane: label is always generic; its role line comes from meta.orchestrator (or a generic fallback)
+  const crewList = () => [{ key: "orchestrator", name: "Orchestrator", role: st.meta?.orchestrator || "Orchestrator" }];
+  // Claude lanes (their spend is read from the `claude` transcript tally, not worker `run` events) are
+  // any meta.models entry with driver "claude" -- no hard-coded model keys, any number of them
+  const claudeLaneKeys = () => new Set((st.meta?.models || []).filter((m) => m.driver === "claude").map((m) => m.key));
+  const claudeLaneIdMap = () => { const o = {}; (st.meta?.models || []).forEach((m) => { if (m.driver === "claude") o[m.id] = m.key; }); return o; };
+  const PALETTE = ["--series-1", "--series-2", "--series-3", "--series-4", "--series-5", "--series-6"];
+  const STATUS = {
+    queued: ["Queued", "var(--muted)"], working: ["Working", "var(--accent)"], fixing: ["Fixing", "var(--bug)"],
+    review: ["In review", "var(--warn)"], merged: ["Merged", "var(--ok)"], failed: ["Failed", "var(--bug)"], dropped: ["Not merged", "var(--muted)"],
+  };
+  const COLS = [["Queued", ["queued"]], ["In progress", ["working", "fixing", "failed"]], ["In review", ["review"]], ["Done", ["merged", "dropped"]]];
+  const SPEEDS = {
+    showcase: (g) => Math.min(Math.max(g / 45, 0.35), 2.4),
+    x60: (g) => Math.min(g / 60, 6),
+    x600: (g) => Math.min(g / 600, 3),
+  };
+  const LS_SPEND_KEY = "swarm-dashboard-spend-expanded";
+  const loadSpendExpanded = () => { try { return localStorage.getItem(LS_SPEND_KEY) === "1"; } catch { return false; } };
+  const saveSpendExpanded = (v) => { try { localStorage.setItem(LS_SPEND_KEY, v ? "1" : "0"); } catch {} };
+
+  const st = {
+    meta: null, events: [], mode: "live", playing: false, speed: "showcase", v: 0, vt: [], viewPhase: null,
+    source: "none", lastFeedTop: null, spendExpanded: loadSpendExpanded(),
+    colors: { orchestrator: "var(--orchestrator)", reviewer: "var(--reviewer)" },
+  };
+  function rebuildColors() {
+    st.colors = { orchestrator: "var(--orchestrator)", reviewer: "var(--reviewer)" };
+    (st.meta?.models || []).forEach((m, i) => { st.colors[m.key] = `var(${PALETTE[i % PALETTE.length]})`; });
+  }
+  const colorOf = (m) => st.colors[m || "orchestrator"] || st.colors.orchestrator;
+  const modelName = (k) => st.meta?.models?.find((m) => m.key === k)?.name || (k === "reviewer" ? "Reviewer" : "Orchestrator");
+  const fmtS = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}h ${String(m).padStart(2, "0")}m` : m ? `${m}m ${String(x).padStart(2, "0")}s` : `${x}s`; };
+  const fmtC = (c) => `$${(c || 0).toFixed(c >= 1 ? 2 : 4)}`;
+  const fmtK = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n || 0);
+  // a run counts as failed when it errored, timed out, or its output was rejected
+  const runFailed = (e) => (e.outcome ? e.outcome !== "ok" : e.exit !== 0);
+  const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const sum = (arr, k) => arr.reduce((a, r) => a + r[k], 0);
+
+  // ---------------------------------------------------------------- fold
+  function fold(nowT) {
+    const s = { phases: {}, cur: "p0", tasks: new Map(), crew: {}, spend: {}, claude: {}, feed: [], scores: [], first: st.events[0]?.t };
+    const agg = (ph, m) => ((s.spend[ph] ??= {})[m] ??= { runs: 0, reruns: 0, failed: 0, fixes: 0, wall: 0, model: 0, tokens: 0, cost: 0 });
+    for (const e of st.events) {
+      if (e.t > nowT) break;
+      const k = `${e.phase}/${e.task}/${e.model || ""}`;
+      const task = () => {
+        let t = s.tasks.get(k);
+        if (!t) { t = { phase: e.phase, task: e.task, model: e.model || null, runs: 0, reruns: 0, failed: 0, fixes: 0, cost: 0, wall: 0, since: e.t, status: "queued" }; s.tasks.set(k, t); }
+        return t;
+      };
+      switch (e.type) {
+        case "phase": { // t = when the phase started, end = when it was marked done
+          const prev = s.phases[e.phase];
+          s.phases[e.phase] = { status: e.status, t: prev?.t ?? e.t, end: e.status === "done" ? e.t : undefined };
+          if (e.status === "active") s.cur = e.phase; break;
+        }
+        case "task": { const t = task(); if (e.status !== t.status) t.since = e.t; t.status = e.status; if (e.title) t.title = e.title; if ("note" in e) t.note = e.note; break; }
+        case "run": {
+          const t = task(); const rerun = t.runs > 0 ? 1 : 0, bad = runFailed(e) ? 1 : 0;
+          t.runs++; t.reruns += rerun; t.failed += bad; t.fixes += e.kind === "fix"; t.cost += e.cost || 0; t.wall += e.wall_s || 0;
+          const a = agg(e.phase, e.model); a.runs++; a.reruns += rerun; a.failed += bad; a.fixes += e.kind === "fix"; a.wall += e.wall_s || 0; a.model += e.model_s || 0;
+          a.tokens += (e.tokens_in || 0) + (e.tokens_out || 0); a.cost += e.cost || 0; break;
+        }
+        case "review": task().review = e; break;
+        case "tests": task().tests = e; break;
+        case "score": task().score = e.score; s.scores.push(e); break;
+        case "crew": s.crew[e.who] = e; break;
+        case "claude": s.claude[`${e.phase}|${e.role}|${e.model}`] = e; continue; // tallies stay out of the feed
+        case "run_start": case "run_end": continue; // ops bookkeeping only (see `swarm.py health`)
+      }
+      s.feed.push(e);
+    }
+    return s;
+  }
+
+  // Claude usage rows: {role, model, name, messages, tokens, cost} for one phase or all phases
+  function claudeRows(s, phase) {
+    const rows = {};
+    for (const e of Object.values(s.claude)) {
+      if (phase && e.phase !== phase) continue;
+      const r = rows[`${e.role}|${e.model}`] ??= { role: e.role, model: e.model, name: e.name, messages: 0, output: 0, tokens: 0, cost: 0 };
+      r.messages += e.messages; r.output += e.output; r.cost += e.cost;
+      r.tokens += e.input + e.output + e.cache_read + e.cache_write;
+    }
+    return Object.values(rows).sort((a, b) => (a.role > b.role ? 1 : -1) || b.cost - a.cost);
+  }
+
+  // total spend for one phase: non-Claude workers' run cost + every Claude tally's cost (orchestrator
+  // and Claude-driven lanes) -- Claude-driven lanes' own `run` events carry cost 0, so nothing double-counts
+  function phaseCost(s, ph) {
+    const runCost = Object.values(s.spend[ph] || {}).reduce((a, r) => a + r.cost, 0);
+    const claudeCost = Object.values(s.claude).filter((e) => e.phase === ph).reduce((a, e) => a + e.cost, 0);
+    return runCost + claudeCost;
+  }
+
+  // one row per agent (orchestrator + every model lane) for the phase spend chevron
+  function phaseAgentRows(s, ph) {
+    const idMap = claudeLaneIdMap(), laneKeys = claudeLaneKeys();
+    const orch = Object.values(s.claude).filter((e) => e.phase === ph && e.role === "orchestrator");
+    const rows = [{
+      key: "orchestrator", name: "Orchestrator", runs: null, reruns: null, failed: null, wall: null,
+      tokens: orch.reduce((a, e) => a + e.input + e.output + e.cache_read + e.cache_write, 0),
+      cost: orch.reduce((a, e) => a + e.cost, 0),
+    }];
+    for (const m of st.meta?.models || []) {
+      const r = (s.spend[ph] || {})[m.key] || { runs: 0, reruns: 0, failed: 0, wall: 0, tokens: 0, cost: 0 };
+      let tokens = r.tokens, cost = r.cost;
+      if (laneKeys.has(m.key)) {
+        const tal = Object.values(s.claude).filter((e) => e.phase === ph && e.role === "reviewer" && e.model === m.id);
+        tokens = tal.reduce((a, e) => a + e.input + e.output + e.cache_read + e.cache_write, 0);
+        cost = tal.reduce((a, e) => a + e.cost, 0);
+      }
+      rows.push({ key: m.key, name: m.name, runs: r.runs, reruns: r.reruns, failed: r.failed, wall: r.wall, tokens, cost });
+    }
+    return rows;
+  }
+
+  function phaseSpendTableHtml(s, ph) {
+    const na = (v) => v == null ? "–" : v;
+    const rows = phaseAgentRows(s, ph);
+    return `<thead><tr><th>Agent</th><th>Runs</th><th>Reruns</th><th>Failed</th><th>Wall</th><th>Tokens</th><th>Cost</th></tr></thead><tbody>` +
+      rows.map((r) => `<tr><td><span class="chip" style="--c:${colorOf(r.key)}">${esc(r.name)}</span></td>
+        <td class="num">${na(r.runs)}</td><td class="num">${na(r.reruns)}</td><td class="num">${r.failed ? `<span style="color:var(--bug)">${r.failed}</span>` : na(r.failed)}</td>
+        <td class="num">${r.wall != null ? fmtS(r.wall) : "–"}</td><td class="num">${fmtK(r.tokens)}</td><td class="num">${fmtC(r.cost)}</td></tr>`).join("") + "</tbody>";
+  }
+
+  // bake-off scorecard for one phase: only while at least one scored task there is still unsettled
+  function bakeoffHtml(tasksAll, ph) {
+    const bt = tasksAll.filter((t) => t.phase === ph && t.score != null);
+    const unsettled = bt.some((t) => t.status !== "merged" && t.status !== "dropped");
+    if (!bt.length || !unsettled) return "";
+    const best = Math.max(...bt.map((t) => t.score ?? -1));
+    return `<div class="scorecard">
+      <div class="panel-h"><h3>Bake-off scorecard</h3><span class="eyebrow">same spec · same tests</span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Model</th><th>Tests</th><th>Review</th><th>Time</th><th>Cost</th><th>Score</th></tr></thead><tbody>` +
+      bt.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map((t) => `<tr class="${t.score === best && best >= 0 ? "win" : ""}"><td><span class="chip" style="--c:${colorOf(t.model)}">${esc(modelName(t.model))}</span></td>
+        <td class="num">${t.tests ? `${t.tests.passed}/${t.tests.passed + t.tests.failed}` : "–"}</td>
+        <td class="num">${t.review ? (t.review.verdict === "pass" ? "clean" : `${t.review.findings} issues`) : "–"}</td>
+        <td class="num">${t.wall ? fmtS(t.wall) : "–"}</td><td class="num">${t.cost ? fmtC(t.cost) : "–"}</td><td class="num"><b>${t.score ?? "–"}</b></td></tr>`).join("") + "</tbody></table></div></div>";
+  }
+
+  function feedText(e) {
+    const who = (m) => `<span class="chip" style="--c:${colorOf(m)}">${esc(modelName(m))}</span>`;
+    const tk = `<b>${esc(e.task)}</b>`;
+    switch (e.type) {
+      case "phase": return e.status === "active" ? `Phase <b>${esc(e.phase.toUpperCase())}</b> started: ${esc(phaseTitle(e.phase))}` : `Phase <b>${esc(e.phase.toUpperCase())}</b> complete`;
+      case "task": return `${e.model ? who(e.model) : who(null)} ${tk} → <span class="pill" style="--s:${STATUS[e.status][1]}">${STATUS[e.status][0]}</span>${e.note ? ` <span style="color:var(--muted)">${esc(e.note)}</span>` : ""}`;
+      case "run": return `${who(e.model)} finished a ${e.kind} run on ${tk}: <span class="mono">${fmtS(e.wall_s)} · ${fmtK((e.tokens_in || 0) + (e.tokens_out || 0))} tok · ${fmtC(e.cost)}</span>${runFailed(e) ? ` <span class="pill" style="--s:var(--bug)">${esc(e.outcome && e.outcome !== "ok" ? e.outcome : "error")}</span>` : ""}${e.reason ? ` <span style="color:var(--muted)">${esc(e.reason)}</span>` : ""}`;
+      case "review": return `${who("reviewer")} reviewed ${tk} by ${esc(modelName(e.model))}: <span class="pill" style="--s:${e.verdict === "pass" ? "var(--ok)" : "var(--warn)"}">${e.verdict === "pass" ? "Approved" : `${e.findings} change${e.findings === 1 ? "" : "s"} requested`}</span>${e.summary ? ` <span style="color:var(--muted)">${esc(e.summary)}</span>` : ""}`;
+      case "tests": return `Tests on ${tk} (${esc(modelName(e.model))}): <span class="mono" style="color:${e.failed ? "var(--bug)" : "var(--ok)"}">${e.passed} passed, ${e.failed} failed</span>`;
+      case "score": return `Bake-off score for ${esc(modelName(e.model))}: <b class="mono">${e.score}</b>/100${e.summary ? ` <span style="color:var(--muted)">${esc(e.summary)}</span>` : ""}`;
+      case "crew": return `${who(e.who)} ${e.state === "busy" ? esc(e.doing) : "is idle"}`;
+      case "note": return e.who === "orchestrator" ? `${who(null)} noted: ${esc(e.text)}` : `${who(e.who)} ${esc(e.text)}`;
+    }
+    return esc(e.type);
+  }
+  const phaseTitle = (id) => st.meta?.phases?.find((p) => p.id === id)?.title || id;
+
+  // ---------------------------------------------------------------- replay clock
+  function buildVirtual() {
+    const f = SPEEDS[st.speed]; st.vt = [0];
+    for (let i = 1; i < st.events.length; i++) st.vt.push(st.vt[i - 1] + f((st.events[i].t - st.events[i - 1].t) / 1000));
+  }
+  const vTotal = () => st.vt[st.vt.length - 1] || 0;
+  function realAt(v) {
+    const ev = st.events, vt = st.vt;
+    if (!ev.length) return Date.now();
+    if (v <= 0) return ev[0].t;
+    if (v >= vTotal()) return ev[ev.length - 1].t;
+    let lo = 0, hi = vt.length - 1;
+    while (lo < hi - 1) { const mid = (lo + hi) >> 1; vt[mid] <= v ? (lo = mid) : (hi = mid); }
+    const span = vt[hi] - vt[lo] || 1;
+    return ev[lo].t + (v - vt[lo]) / span * (ev[hi].t - ev[lo].t);
+  }
+  const nowT = () => st.mode === "live" ? Date.now() : realAt(st.v);
+
+  // ---------------------------------------------------------------- phase wheel + map
+  function isNarrow() { return window.matchMedia("(max-width: 720px)").matches; }
+
+  // an overlapping card stack: every visible phase renders the SAME full-detail card; the focused
+  // one is in-flow (front, sets the stack's height) and centred, each neighbour is an absolutely-
+  // positioned "back" card pushed sideways into the room beside the front card (pure CSS from the
+  // --dir/--s/--peek vars, no measurement), scaled down, veiled a little more further out, and layered
+  // behind the one closer to the centre. Back cards are non-front but still clickable/focusable as a
+  // whole to bring them to the front; their own inner Spend button is inert until then.
+  function renderWheel(s, phases, view, curId, T) {
+    const rail = $("wheelRail");
+    if (!phases.length) { rail.innerHTML = ""; $("backCurrent").hidden = true; return; }
+    const side = isNarrow() ? 1 : 2;
+    const focusedIdx = Math.max(0, phases.findIndex((p) => p.id === view));
+    const start = Math.max(0, focusedIdx - side), end = Math.min(phases.length - 1, focusedIdx + side);
+    const tasksAll = [...s.tasks.values()];
+    let html = "";
+    for (let i = start; i <= end; i++) {
+      const p = phases[i]; const off = i - focusedIdx; const isFront = off === 0;
+      const ps = s.phases[p.id]; const done = ps?.status === "done"; const isCur = p.id === curId && !!ps;
+      const cls = done ? "done" : isCur ? "active" : "future";
+      const label = done ? "✓ Complete" : isCur ? "In progress" : "Up next";
+      const cost = phaseCost(s, p.id);
+      const spendP = Object.values(s.spend[p.id] || {});
+      const pStart = ps?.t;
+      const elapsed = pStart ? ((done ? ps.end : T) - pStart) / 1000 : 0;
+      const runs = sum(spendP, "runs"), reruns = sum(spendP, "reruns"), failed = sum(spendP, "failed");
+      const absOff = Math.abs(off);
+      const z = 20 - absOff;
+      let style = `z-index:${z};`;
+      if (!isFront) {
+        const scale = Math.max(0.7, 1 - 0.06 * absOff);
+        const veil = Math.min(0.6, 0.3 * absOff);
+        // share of the side room this card's outer edge reaches; the outermost card nearly fills it
+        const peek = side === 1 ? 0.9 : [0, 0.5, 0.92][absOff];
+        style += `--dir:${Math.sign(off)};--s:${scale};--peek:${peek};--veil:${veil};`;
+      }
+      const backAttrs = isFront ? "" : ` role="button" tabindex="0" aria-label="Phase ${i}, ${esc(p.id.toUpperCase())}: ${esc(p.title)} — ${label}. Bring to front."`;
+      const toggleAttrs = isFront ? `id="spendToggle" aria-expanded="${st.spendExpanded}"` : `inert tabindex="-1" aria-hidden="true"`;
+      html += `<div class="wheel-card ${cls} ${isFront ? "front" : "back"}" data-id="${esc(p.id)}" data-offset="${off}" style="${style}"${backAttrs}>
+        <span class="eyebrow">Phase ${i} · ${esc(p.id.toUpperCase())} · ${label}</span>
+        <h2>${esc(p.title)}<span>.</span></h2>
+        <p>${esc(p.goal)}</p>
+        <p class="exit"><b>Done when:</b> ${esc(p.exit)}</p>
+        <div class="phase-stats">
+          <div><span class="eyebrow">Elapsed</span><span class="v">${pStart ? fmtS(elapsed) : "–"}</span></div>
+          <div><span class="eyebrow">Runs</span><span class="v">${runs}</span></div>
+          <div><span class="eyebrow">Reruns</span><span class="v">${reruns}</span></div>
+          <div><span class="eyebrow">Failed</span><span class="v">${failed}</span></div>
+          <div><span class="eyebrow">Spend</span><span class="v">${fmtC(cost)}</span></div>
+        </div>
+        <button class="spend-toggle" ${toggleAttrs}>Spend ${st.spendExpanded ? "▾" : "▸"}</button>
+        <div class="spend-detail" ${st.spendExpanded ? "" : "hidden"}>
+          <div class="tbl-wrap"><table>${phaseSpendTableHtml(s, p.id)}</table></div>
+        </div>
+        ${bakeoffHtml(tasksAll, p.id)}
+      </div>`;
+    }
+    rail.innerHTML = html;
+    $("backCurrent").hidden = view === curId;
+  }
+
+  function renderPhasemap(s, phases, view, curId) {
+    const n = phases.length;
+    const map = $("phasemap"), win = $("phasemapWindow");
+    if (!n) { map.innerHTML = ""; win.style.width = "0"; return; }
+    map.style.gridTemplateColumns = `repeat(${n}, 26px)`;
+    map.innerHTML = phases.map((p, i) => {
+      const ps = s.phases[p.id]; const done = ps?.status === "done"; const isCur = p.id === curId && !!ps;
+      const cls = done ? "done" : isCur ? "active" : "future";
+      return `<button class="pm-cell ${cls} ${p.id === view ? "pm-focus" : ""}" data-id="${esc(p.id)}" aria-current="${isCur}" aria-label="Phase ${i}: ${esc(p.title)}" title="${esc(p.title)}">${i}</button>`;
+    }).join("");
+    const side = isNarrow() ? 1 : 2;
+    const focusedIdx = Math.max(0, phases.findIndex((p) => p.id === view));
+    const start = Math.max(0, focusedIdx - side), end = Math.min(n - 1, focusedIdx + side);
+    // position the window box against the cells' real geometry (fixed-width, centered grid --
+    // percentages of the wrap would no longer line up with where the cells actually render)
+    const wrap = map.parentElement;
+    const cells = map.querySelectorAll(".pm-cell");
+    if (cells[start] && cells[end] && wrap) {
+      const wrapRect = wrap.getBoundingClientRect();
+      const startRect = cells[start].getBoundingClientRect(), endRect = cells[end].getBoundingClientRect();
+      win.style.left = `${(startRect.left - wrapRect.left).toFixed(1)}px`;
+      win.style.width = `${(endRect.right - startRect.left).toFixed(1)}px`;
+    }
+  }
+
+  // ---------------------------------------------------------------- render
+  // render() rewrites the wheel and map with innerHTML every second in live mode; remember what had
+  // keyboard focus so a tick doesn't drop it back to <body>
+  function focusSelector() {
+    const a = document.activeElement;
+    if (!a || a === document.body) return null;
+    if (a.id) return `#${CSS.escape(a.id)}`;
+    return a.dataset?.id && a.classList[0] ? `.${a.classList[0]}[data-id="${CSS.escape(a.dataset.id)}"]` : null;
+  }
+
+  function render() {
+    const focused = focusSelector();
+    try { paint(); } finally {
+      if (focused && document.activeElement === document.body) document.querySelector(focused)?.focus({ preventScroll: true });
+    }
+  }
+
+  function paint() {
+    const T = nowT();
+    const s = fold(T);
+    const view = st.viewPhase || s.cur;
+    document.body.classList.toggle("is-live", st.mode === "live");
+    const projectName = st.meta?.name || "Swarm";
+    document.title = st.meta?.name ? `${st.meta.name} · Build Board` : "Build Board";
+    $("brandTitle").innerHTML = `${esc(projectName)} <b>Ops</b>`;
+    $("clock").textContent = st.mode === "live" ? new Date(T).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : `Replaying ${new Date(T).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}`;
+
+    const phases = st.meta?.phases || [];
+    renderWheel(s, phases, view, s.cur, T);
+    renderPhasemap(s, phases, view, s.cur);
+
+    const P = phases.find((p) => p.id === view) || phases[0];
+    const tasks = [...s.tasks.values()];
+
+    // crew lanes (per-lane totals scoped to the focused phase)
+    const lanes = [...crewList(), ...(st.meta?.models || []).map((m) => ({ key: m.key, name: m.name, role: m.role || m.id }))];
+    $("crew").innerHTML = lanes.map((l) => {
+      let busy = false, doing = `<span class="idle">Idle</span>`, since = null;
+      if (CREW_KEYS.has(l.key)) {
+        const c = s.crew[l.key];
+        if (c?.state === "busy") { busy = true; doing = esc(c.doing); since = c.t; }
+      } else {
+        const act = tasks.filter((t) => t.model === l.key && (t.status === "working" || t.status === "fixing")).sort((a, b) => b.since - a.since)[0];
+        if (act) { busy = true; since = act.since; doing = `${act.status === "fixing" ? "Fixing" : "Building"} <b>${esc(act.title || act.task)}</b> <span class="mono" style="color:var(--muted)">${esc(act.phase.toUpperCase())}</span>`; }
+      }
+      let metaRight = `<span></span>`;
+      if (!CREW_KEYS.has(l.key)) {
+        const r = (s.spend[view] || {})[l.key] || { runs: 0, wall: 0, cost: 0 };
+        metaRight = `<span class="num">${r.runs} runs · ${fmtS(r.wall)} · ${fmtC(r.cost)}</span>`;
+      } else {
+        const cr = claudeRows(s, view).filter((r) => r.role === l.key);
+        if (cr.length) metaRight = `<span class="num">${cr.map((r) => `${esc(r.name)} ${fmtC(r.cost)}`).join(" · ")}</span>`;
+      }
+      return `<article class="lane ${busy ? "busy" : ""}" style="--c:${colorOf(l.key)}">
+        <div class="who"><span class="sig"></span><h3>${esc(l.name)}</h3></div>
+        <div class="role">${esc(l.role)}</div>
+        <div class="doing">${doing}</div>
+        <div class="meta"><span class="num">${busy && since ? "for " + fmtS((T - since) / 1000) : "&nbsp;"}</span>${metaRight}</div>
+      </article>`;
+    }).join("");
+
+    // board
+    const vt = tasks.filter((t) => t.phase === view);
+    $("boardTitle").textContent = `Task board · ${P ? P.title : ""}`;
+    $("board").innerHTML = COLS.map(([name, sts]) => {
+      const items = vt.filter((t) => sts.includes(t.status));
+      return `<div class="col"><div class="eyebrow"><span>${name}</span><span class="num">${items.length}</span></div>${items.length ? items.map(card).join("") : `<div class="empty">Nothing here</div>`}</div>`;
+    }).join("");
+    function card(t) {
+      const [label, sc] = STATUS[t.status];
+      const bits = [];
+      if (t.runs) bits.push(`${t.runs} run${t.runs > 1 ? "s" : ""}${t.reruns ? ` · ${t.reruns} rerun${t.reruns > 1 ? "s" : ""}` : ""}`);
+      if (t.failed) bits.push(`<span style="color:var(--bug)">${t.failed} failed</span>`);
+      if (t.cost) bits.push(fmtC(t.cost));
+      if (t.wall) bits.push(fmtS(t.wall));
+      if (t.tests) bits.push(`<span style="color:${t.tests.failed ? "var(--bug)" : "var(--ok)"}">${t.tests.passed}/${t.tests.passed + t.tests.failed} tests</span>`);
+      if (t.score != null) bits.push(`score ${t.score}`);
+      return `<div class="card ${t.status}" style="--c:${colorOf(t.model)}">
+        <div class="ttl">${esc(t.title || t.task)}</div>
+        <div class="row"><span class="chip" style="--c:${colorOf(t.model)}">${esc(modelName(t.model))}</span><span class="pill" style="--s:${sc}">${label}</span></div>
+        ${bits.length ? `<div class="row num">${bits.join(" · ")}</div>` : ""}
+        ${t.note ? `<div class="row">${esc(t.note)}</div>` : ""}
+      </div>`;
+    }
+
+    // spend table (all phases; per-phase detail lives in the wheel's chevron)
+    const failCell = (n) => (n ? `<span style="color:var(--bug)">${n}</span>` : "0");
+    const laneKeys = claudeLaneKeys(), idMap = claudeLaneIdMap();
+    const laneRuns = (key) => {
+      if (!key) return null;
+      const r = { runs: 0, reruns: 0, failed: 0 };
+      for (const byM of Object.values(s.spend)) if (byM[key]) for (const k in r) r[k] += byM[key][k];
+      return r;
+    };
+    const models = (st.meta?.models || []).filter((m) => !laneKeys.has(m.key));
+    const rows = models.map((m) => {
+      const r = { runs: 0, reruns: 0, failed: 0, fixes: 0, wall: 0, model: 0, tokens: 0, cost: 0 };
+      for (const byM of Object.values(s.spend)) if (byM[m.key]) for (const k in r) r[k] += byM[m.key][k];
+      return [m, r];
+    });
+    const tot = rows.reduce((a, [, r]) => { for (const k in r) a[k] = (a[k] || 0) + r[k]; return a; }, {});
+    $("spend").innerHTML = `<thead><tr><th>Worker</th><th>Runs</th><th>Reruns</th><th>Failed</th><th>Wall</th><th>Tokens</th><th>Cost</th></tr></thead><tbody>` +
+      rows.map(([m, r]) => `<tr><td><span class="chip" style="--c:${colorOf(m.key)}">${esc(m.name)}</span></td><td class="num">${r.runs}</td><td class="num">${r.reruns}</td><td class="num">${failCell(r.failed)}</td><td class="num">${fmtS(r.wall)}</td><td class="num">${fmtK(r.tokens)}</td><td class="num">${fmtC(r.cost)}</td></tr>`).join("") +
+      `<tr class="total"><td>Workers total</td><td class="num">${tot.runs || 0}</td><td class="num">${tot.reruns || 0}</td><td class="num">${failCell(tot.failed || 0)}</td><td class="num">${fmtS(tot.wall || 0)}</td><td class="num">${fmtK(tot.tokens || 0)}</td><td class="num">${fmtC(tot.cost || 0)}</td></tr>` +
+      (() => {
+        const cr = claudeRows(s, null);
+        if (!cr.length) return "</tbody>";
+        const ct = cr.reduce((a, r) => a + r.cost, 0);
+        return `<tr><th colspan="7" style="padding-top:14px">Claude · orchestrator &amp; subagents</th></tr>` +
+          `<tr><th>Role · model</th><th>Runs</th><th>Reruns</th><th>Failed</th><th>Msgs</th><th>Tokens</th><th>Cost</th></tr>` +
+          cr.map((r) => { const lr = laneRuns(idMap[r.model]); const na = r.role === "orchestrator" || !lr;
+            return `<tr><td><span class="chip" style="--c:${colorOf(r.role)}">${r.role === "orchestrator" ? "Orchestrator" : "Subagent"} · ${esc(r.name)}</span></td><td class="num">${na ? "–" : lr.runs}</td><td class="num">${na ? "–" : lr.reruns}</td><td class="num">${na ? "–" : failCell(lr.failed)}</td><td class="num">${r.messages}</td><td class="num">${fmtK(r.tokens)}</td><td class="num">${fmtC(r.cost)}</td></tr>`; }).join("") +
+          `<tr class="total"><td>Claude total</td><td colspan="5"></td><td class="num">${fmtC(ct)}</td></tr>` +
+          `<tr class="total"><td>Project total</td><td colspan="5"></td><td class="num">${fmtC(ct + (tot.cost || 0))}</td></tr></tbody>`;
+      })();
+
+    // feed
+    const feed = s.feed.slice(-120).reverse();
+    const top = feed[0] ? feed[0].t + feed[0].type : null;
+    $("feedCount").textContent = `${s.feed.length} events`;
+    $("feed").innerHTML = feed.map((e, i) => `<li class="${i === 0 && top !== st.lastFeedTop && st.lastFeedTop !== null ? "fresh" : ""}"><time>${hhmm(e.t)}</time><div>${feedText(e)}</div></li>`).join("") || `<li><time></time><div class="empty">No activity yet.</div></li>`;
+    st.lastFeedTop = top;
+
+    // player
+    const total = vTotal();
+    $("scrub").value = st.mode === "live" || !total ? 1000 : Math.round(st.v / total * 1000);
+    $("play").textContent = st.playing ? "❚❚ Pause" : st.mode === "live" ? "▶ Replay" : "▶ Play";
+    $("m-live").setAttribute("aria-pressed", st.mode === "live");
+    $("m-replay").setAttribute("aria-pressed", st.mode === "replay");
+    const first = st.events[0]?.t;
+    $("ptime").textContent = !first ? "" : st.mode === "live" ? `${st.events.length} events · ${fmtS((Date.now() - first) / 1000)} total` : `${fmtS((T - first) / 1000)} of ${fmtS((st.events[st.events.length - 1].t - first) / 1000)} · ${st.speed === "showcase" ? "showcase" : st.speed.slice(1) + "×"}`;
+  }
+
+  function renderMarks() {
+    const total = vTotal(); if (!total) { $("marks").innerHTML = ""; return; }
+    const seen = new Set(); let html = "";
+    st.events.forEach((e, i) => {
+      if (e.type === "phase" && e.status === "active" && !seen.has(e.phase)) {
+        seen.add(e.phase); html += `<span style="left:${(st.vt[i] / total * 100).toFixed(2)}%">${esc(e.phase.toUpperCase())}</span>`;
+      }
+    });
+    $("marks").innerHTML = html;
+  }
+
+  // ---------------------------------------------------------------- control
+  let raf = 0, lastFrame = 0, lastPaint = 0;
+  function tick(ts) {
+    if (!st.playing) return;
+    const dt = lastFrame ? (ts - lastFrame) / 1000 : 0; lastFrame = ts;
+    st.v = Math.min(vTotal(), st.v + dt);
+    if (st.v >= vTotal()) { st.playing = false; render(); return; }
+    if (ts - lastPaint > 90) { render(); lastPaint = ts; }
+    raf = requestAnimationFrame(tick);
+  }
+  function play() { if (st.mode === "live") { st.mode = "replay"; st.v = 0; } if (st.v >= vTotal()) st.v = 0; st.playing = true; lastFrame = 0; raf = requestAnimationFrame(tick); render(); }
+  function pause() { st.playing = false; cancelAnimationFrame(raf); render(); }
+  function goLive() { pause(); st.mode = "live"; st.viewPhase = null; render(); }
+  function setSpeed(sp) {
+    const T = nowT(); st.speed = sp; buildVirtual();
+    // keep the same real moment on screen after re-mapping the clock
+    let i = st.events.findIndex((e) => e.t > T); i = i < 0 ? st.events.length - 1 : Math.max(0, i - 1);
+    st.v = st.vt[i] || 0;
+    document.querySelectorAll("#speeds button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.speed === sp));
+    renderMarks(); render();
+  }
+  function step(dir) {
+    if (!st.events.length) return;
+    if (st.mode === "live") { st.mode = "replay"; st.v = vTotal(); }
+    pause();
+    const cur = st.vt.findIndex((v) => v > st.v + 1e-6);
+    const i = cur < 0 ? st.vt.length - 1 : cur;
+    st.v = dir > 0 ? (st.vt[i] ?? vTotal()) : (st.vt[Math.max(0, (cur < 0 ? st.vt.length : cur) - 2)] || 0);
+    render();
+  }
+  function shiftPhase(d) {
+    const ids = (st.meta?.phases || []).map((p) => p.id); if (!ids.length) return;
+    const cur = ids.indexOf(st.viewPhase || fold(nowT()).cur);
+    st.viewPhase = ids[Math.min(ids.length - 1, Math.max(0, cur + d))]; render();
+  }
+  function toggleSpend() { st.spendExpanded = !st.spendExpanded; saveSpendExpanded(st.spendExpanded); render(); }
+
+  $("play").onclick = () => (st.playing ? pause() : play());
+  $("m-live").onclick = goLive;
+  $("m-replay").onclick = () => { st.mode = "replay"; st.v = 0; st.viewPhase = null; play(); };
+  $("speeds").onclick = (e) => { const sp = e.target.closest("button")?.dataset.speed; if (sp) setSpeed(sp); };
+  $("scrub").oninput = (e) => { const val = e.target.value; if (st.mode === "live") st.mode = "replay"; pause(); st.v = val / 1000 * vTotal(); st.viewPhase = null; render(); };
+  $("wheelPrev").onclick = () => shiftPhase(-1);
+  $("wheelNext").onclick = () => shiftPhase(1);
+  $("backCurrent").onclick = () => { st.viewPhase = null; render(); };
+  $("wheelTrack").addEventListener("click", (e) => {
+    if (e.target.closest("#spendToggle")) { toggleSpend(); return; }
+    const back = e.target.closest(".wheel-card.back");
+    if (back) { st.viewPhase = back.dataset.id; render(); }
+  });
+  // back cards are a div (not a button, since they contain their own nested Spend button) with
+  // role="button" tabindex="0" -- bring one to front on Enter/Space too, matching the click above
+  $("wheelTrack").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const back = e.target.closest(".wheel-card.back");
+    if (back) { e.preventDefault(); e.stopPropagation(); st.viewPhase = back.dataset.id; render(); }
+  });
+  $("phasemap").addEventListener("click", (e) => {
+    const cell = e.target.closest("[data-id]");
+    if (cell) { st.viewPhase = cell.dataset.id; render(); }
+  });
+  // trackpad horizontal scroll / shift+wheel over the track, debounced to one phase per gesture
+  let wheelLock = false;
+  $("wheelTrack").addEventListener("wheel", (e) => {
+    const dx = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : (e.shiftKey ? e.deltaY : 0);
+    if (Math.abs(dx) < 8) return;
+    e.preventDefault();
+    if (wheelLock) return;
+    wheelLock = true;
+    shiftPhase(dx > 0 ? 1 : -1);
+    setTimeout(() => { wheelLock = false; }, 450);
+  }, { passive: false });
+  // touch swipe via pointer events
+  let ptStartX = null;
+  $("wheelTrack").addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") ptStartX = e.clientX; });
+  $("wheelTrack").addEventListener("pointerup", (e) => {
+    if (ptStartX == null) return;
+    const dx = e.clientX - ptStartX; ptStartX = null;
+    if (Math.abs(dx) > 40) shiftPhase(dx < 0 ? 1 : -1);
+  });
+  $("wheelTrack").addEventListener("pointercancel", () => { ptStartX = null; });
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
+  document.addEventListener("keydown", (e) => {
+    if (e.target.matches?.("input, textarea") && e.key !== " ") return;
+    // Space/Enter on a focused control presses that control, not the global play/pause shortcut
+    if ((e.key === " " || e.key === "Enter") && e.target.closest?.("button, [role=button], a")) return;
+    const k = e.key;
+    if (k === " ") { e.preventDefault(); st.playing ? pause() : play(); }
+    else if (k === "ArrowRight") { e.preventDefault(); step(1); }
+    else if (k === "ArrowLeft") { e.preventDefault(); step(-1); }
+    else if (k === "Home") { if (st.mode === "live") st.mode = "replay"; pause(); st.v = 0; render(); }
+    else if (k === "End") { goLive(); }
+    else if (k === "1") setSpeed("showcase"); else if (k === "2") setSpeed("x60"); else if (k === "3") setSpeed("x600");
+    else if (k === "[") shiftPhase(-1); else if (k === "]") shiftPhase(1);
+    else if (k === "r" || k === "R") { st.mode = "replay"; st.v = 0; st.viewPhase = null; play(); }
+    else if (k === "l" || k === "L") goLive();
+  });
+
+  // ---------------------------------------------------------------- data
+  function setData(meta, events) {
+    const atEnd = st.mode === "live" || st.v >= vTotal() - 1e-6;
+    st.meta = meta || st.meta; st.events = events.slice().sort((a, b) => a.t - b.t);
+    rebuildColors();
+    buildVirtual(); renderMarks();
+    if (st.mode === "replay" && atEnd && !st.playing) st.v = vTotal();
+    render();
+  }
+  setInterval(() => { if (st.mode === "live") render(); }, 1000);
+
+  // one function, first source that works: embedded replay, then the claude.ai db capability, then
+  // (standalone, e.g. `scribe.py watch` + a local server) same-origin polling of ./meta.json +
+  // ./events.json. Nothing else fetched.
+  async function initData() {
+    if (window.__SWARM_EMBED__) {
+      st.source = "embed";
+      setData(window.__SWARM_EMBED__.meta, window.__SWARM_EMBED__.events);
+      // an exported copy opens straight into the showcase replay
+      st.mode = "replay"; st.v = 0; render();
+      return;
+    }
+    render();
+    const db = window.claude?.use ? await window.claude.use("db") : null;
+    if (db) {
+      st.source = "db";
+      let meta = null; const byPhase = {};
+      const push = () => setData(meta, Object.values(byPhase).flat());
+      db.doc("project/meta").onSnapshot((d) => { if (d.exists) { meta = d.data(); push(); } }, () => {});
+      db.collection("timeline").onSnapshot((q) => {
+        for (const k in byPhase) delete byPhase[k];
+        q.docs.forEach((d) => { byPhase[d.id] = d.data().events || []; });
+        push();
+      }, (err) => { $("banner").hidden = false; $("banner").textContent = `Live updates stopped (${err.code}). Reload the page to reconnect.`; });
+      return;
+    }
+    const pollOnce = async () => {
+      try {
+        const [metaRes, eventsRes] = await Promise.all([fetch("./meta.json", { cache: "no-store" }), fetch("./events.json", { cache: "no-store" })]);
+        if (!metaRes.ok || !eventsRes.ok) return false;
+        setData(await metaRes.json(), await eventsRes.json());
+        return true;
+      } catch { return false; }
+    };
+    if (await pollOnce()) {
+      st.source = "poll";
+      setInterval(pollOnce, 5000);
+      return;
+    }
+    $("banner").hidden = false;
+    $("banner").textContent = "No build data found. This page reads meta.json and events.json from the folder it is served from; start the board's refresh loop, or open an exported replay.";
+  }
+  initData();
+})();
+</script>

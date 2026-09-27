@@ -1,0 +1,81 @@
+# Swarm config for the "Text Stats Demo" project.
+# Layout:  demo/textstats (repo)  demo/textstats-wt (worker worktrees)  demo/textstats-ops (this folder)
+
+[project]
+name = "Text Stats Demo"
+repo = "/home/you/code/textstats"
+worktrees = "/home/you/code/textstats-wt"          # workers may ONLY run in folders under here
+forbidden = [                          # never host a worker here (subfolders included)
+    "/home/you/private",               # anything workers must never touch
+    "/home/you/code/other-project",    # another project's main checkout
+    "/home/you/.ssh",
+]
+records_dir = "tools/swarm-records"    # swarm.py sync copies logs/prompts here inside the repo
+test_cmd = "/home/you/code/textstats/.venv/bin/python -m pytest -q"
+lint_cmd = "/home/you/code/textstats/.venv/bin/ruff check ."
+
+[opencode]
+bin = "opencode"
+
+[[models]]
+key = "luna"
+id = "openrouter/openai/gpt-5.6-luna"
+name = "GPT-5.6 Luna"
+
+[[models]]
+key = "muse"
+id = "openrouter/meta/muse-spark-1.3-contributor"
+name = "Muse Spark 1.3 Contributor"
+
+[[models]]
+key = "flash"
+id = "openrouter/deepseek/deepseek-v4.1-flash"
+name = "DeepSeek V4.1 Flash"
+
+[[phases]]
+id = "p0"
+title = "Foundations"
+goal = "Contract, acceptance tests, AGENTS.md."
+exit = "Tests collect; contract documented."
+
+[[phases]]
+id = "p1"
+title = "Core library"
+goal = "word_counts and summarize implemented to the contract."
+exit = "All acceptance tests pass; reviewed by a second model."
+
+[watchdog]
+stall = 120          # kill if no output at all for this long (s)
+stall_active = 600   # kill if silent this long after output started (s)
+timeout = 900        # hard cap per run (s)
+
+[dashboard]
+url = ""             # optional claude.ai Artifact URL for the live dashboard
+
+[claude]
+session_dir = "~/.claude/projects/-data-python-learn"
+session = ""         # empty: tally every transcript touched since the first event
+
+[claude.prices."claude-opus-5-5"]
+in = 4
+out = 20
+cache_read = 0.20
+cache_write_5m = 5
+cache_write_1h = 8
+name = "Opus 5.5"
+
+[claude.prices."claude-sonnet-5"]
+in = 2
+out = 10
+cache_read = 0.20
+cache_write_5m = 2.50
+cache_write_1h = 4
+name = "Sonnet 5"
+
+[claude.prices."claude-haiku-4-5"]
+in = 1
+out = 5
+cache_read = 0.10
+cache_write_5m = 1.25
+cache_write_1h = 2
+name = "Haiku 4.5"
