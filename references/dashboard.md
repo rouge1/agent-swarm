@@ -8,9 +8,13 @@
   expands a per-agent spend table for that phase). The focused phase sits in front in the centre; its neighbours
   are tucked behind it, completed to the left and future to the right (up to 2 per side on desktop, 1 on narrow
   screens), each one opaque, a little smaller and more veiled than the one in front of it, and pushed out just
-  far enough to peek past it. Only the front card's Spend button is live. Navigate with the ‹ › buttons (hidden
-  on narrow screens), `[`/`]` keys, trackpad/shift-wheel scroll, touch swipe, or by clicking (or Enter/Space on)
-  a peeking card. The current phase's cell in the phase map pulses, so it is easy to find again (L or
+  far enough to peek past it. Card text is centred; both side edges of every card carry the phase number in a
+  circle with the number spelled out below it in stacked letters (filled for the current phase, green when
+  done), so a card peeking from either side still says which phase it is (hidden on narrow screens, where
+  nothing peeks). Only the front card's Spend button is live. Navigate with the large ‹ › buttons (hidden on
+  narrow screens), `[`/`]` keys, trackpad/shift-wheel scroll, by dragging the cards left or right (mouse,
+  pen or finger; they follow the pointer and step one phase per stretch of the drag), or by clicking (or
+  Enter/Space on) a peeking card. The current phase's cell in the phase map pulses, so it is easy to find again (L or
   End goes back to live). The bake-off scorecard
   appears inside a phase card only while that phase has scored tasks that aren't all merged/dropped yet -- once
   settled it disappears.

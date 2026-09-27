@@ -91,9 +91,10 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 /* phase wheel */
 .wheel-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .wheel-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.wheel-nav { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); font: 600 16px/1 var(--label); display: flex; align-items: center; justify-content: center; }
+.wheel-nav { flex: none; width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); font: 700 34px/1 var(--label); padding-bottom: 4px; display: flex; align-items: center; justify-content: center; }
 .wheel-nav:hover { border-color: var(--accent); color: var(--accent); }
-.wheel-track { flex: 1; min-width: 0; overflow: hidden; touch-action: pan-y; }
+.wheel-track { flex: 1; min-width: 0; overflow: hidden; touch-action: pan-y; cursor: grab; }
+.wheel-track.dragging { cursor: grabbing; user-select: none; }
 /* the stack: one in-flow front card (which sets the stack's height) plus absolutely-positioned
    back cards layered behind it, each offset sideways by a fraction of its own (shared) width */
 .wheel-rail { position: relative; overflow: hidden; display: flex; justify-content: center; container-type: inline-size; }
@@ -101,8 +102,20 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
    growing to 240px a side on a wide window); no fixed cap, the card grows with the browser.
    the side room left over, (100cqw - --w) / 2, is shared out between the back
    cards so each layer peeks past the one in front of it: [1 [2 [3] 4] 5] */
-.wheel-card { --w: calc(100cqw - 2 * clamp(14px, 20cqw - 60px, 240px)); position: absolute; top: 0; left: 0; right: 0; margin-inline: auto; width: var(--w); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); text-align: left; padding: 22px; display: grid; gap: 10px; box-shadow: 0 8px 26px -18px rgba(0, 0, 0, .4); transition: transform .35s cubic-bezier(.22, .8, .28, 1), opacity .35s, border-color .2s; }
+.wheel-card { --w: calc(100cqw - 2 * clamp(14px, 20cqw - 60px, 240px)); position: absolute; top: 0; left: 0; right: 0; margin-inline: auto; width: var(--w); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); text-align: center; padding: 22px 64px; display: grid; gap: 10px; translate: var(--drag, 0px) 0; box-shadow: 0 8px 26px -18px rgba(0, 0, 0, .4); transition: transform .35s cubic-bezier(.22, .8, .28, 1), opacity .35s, border-color .2s; }
+/* while the pointer drags the stack every card follows it; on release they ease back */
+.wheel-rail.settle .wheel-card { transition: translate .25s ease-out, transform .35s cubic-bezier(.22, .8, .28, 1), opacity .35s, border-color .2s; }
 .wheel-card.entering { opacity: 0; }
+/* both side edges carry the phase number, circled, with the number spelled out below it in upright
+   stacked letters, so a card peeking out from either side of the stack still says which phase it is */
+.wheel-card .edge { position: absolute; top: 18px; width: 30px; display: grid; justify-items: center; gap: 10px; color: var(--muted); pointer-events: none; }
+.wheel-card .edge.l { left: 16px; }
+.wheel-card .edge.r { right: 16px; }
+.edge .num { width: 30px; height: 30px; border-radius: 50%; border: 2px solid currentColor; display: grid; place-items: center; font: 700 14px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.edge .word { writing-mode: vertical-lr; text-orientation: upright; font: 700 13px/1 var(--label); letter-spacing: -.12em; text-transform: uppercase; }
+.wheel-card.done .edge { color: var(--ok); }
+.wheel-card.active .edge { color: var(--accent); }
+.wheel-card.active .edge .num { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .wheel-card.front { position: relative; z-index: 20; }
 .wheel-card.back { cursor: pointer; font: inherit; color: inherit; transform: translateX(calc(var(--dir) * (var(--w) * (1 - var(--s)) / 2 + var(--peek) * (100cqw - var(--w)) / 2))) scale(var(--s)); }
 /* back cards stay opaque (so the card in front hides what's behind it) and are dimmed by a veil */
@@ -121,14 +134,15 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .wheel-card p { margin: 0; color: var(--muted); }
 .wheel-card .exit { font-size: 13px; }
 .wheel-card .exit b { color: var(--ink); font-weight: 600; }
-.phase-stats { display: flex; flex-wrap: wrap; gap: 18px; row-gap: 8px; }
-.phase-stats div { display: grid; gap: 2px; text-align: right; }
+.phase-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; row-gap: 8px; }
+.phase-stats div { display: grid; gap: 2px; text-align: center; }
 .phase-stats .v { font: 500 18px/1 var(--mono); font-variant-numeric: tabular-nums; }
-.spend-toggle { justify-self: start; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 5px 10px; font: 600 12px/1 var(--body); color: var(--ink); }
+.spend-toggle { justify-self: center; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 5px 10px; font: 600 12px/1 var(--body); color: var(--ink); }
 .spend-toggle:hover { border-color: var(--accent); }
 .spend-detail { display: grid; gap: 6px; }
 .scorecard { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 8px; }
 .scorecard h3 { font-size: 14px; }
+.scorecard .panel-h { justify-content: center; }
 
 /* phase map */
 .phasemap-wrap { position: relative; cursor: grab; touch-action: pan-y; user-select: none; }
@@ -212,6 +226,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
 @media (max-width: 720px) {
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .wheel-card { padding: 16px; }
+  .wheel-card .edge { display: none; } /* a phone's stack has no room to peek into */
   .wheel-nav { display: none; } /* swipe, the peeking card and the phase map below all move the stack */
   .player .in { grid-template-columns: 1fr; gap: 8px; }
   .ptime { text-align: left; }
@@ -499,6 +514,11 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   // --dir/--s/--peek vars, no measurement), scaled down, veiled a little more further out, and layered
   // behind the one closer to the centre. Back cards are non-front but still clickable/focusable as a
   // whole to bring them to the front; their own inner Spend button is inert until then.
+  const ONES = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",
+    "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const numberWord = (n) => n < 20 ? ONES[n] : n < 100 ? TENS[Math.floor(n / 10)] + (n % 10 ? ONES[n % 10] : "") : String(n);
+
   function renderWheel(s, phases, view, curId, T) {
     const rail = $("wheelRail");
     if (!phases.length) { rail.innerHTML = ""; return; }
@@ -531,7 +551,8 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
         style += `--dir:${Math.sign(off)};--s:${scale};--peek:${peek};--veil:${veil};`;
       }
       const toggleAttrs = isFront ? `id="spendToggle" aria-expanded="${st.spendExpanded}"` : `inert tabindex="-1" aria-hidden="true"`;
-      const inner = `<span class="phase-tag">Phase ${i} · ${esc(p.id.toUpperCase())} · <b class="${cls}">${label}</b></span>
+      const edge = (side) => `<span class="edge ${side}" aria-hidden="true"><span class="num">${i}</span><span class="word">${numberWord(i)}</span></span>`;
+      const inner = `${edge("l")}${edge("r")}<span class="phase-tag">Phase ${i} · ${esc(p.id.toUpperCase())} · <b class="${cls}">${label}</b></span>
         <h2>${esc(p.title)}<span>.</span></h2>
         <p>${esc(p.goal)}</p>
         <p class="exit"><b>Done when:</b> ${esc(p.exit)}</p>
@@ -783,6 +804,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   $("wheelPrev").onclick = () => shiftPhase(-1);
   $("wheelNext").onclick = () => shiftPhase(1);
   $("wheelTrack").addEventListener("click", (e) => {
+    if (cardDrag.justDragged) return; // the click that ends a drag doesn't pick a card
     if (e.target.closest("#spendToggle")) { toggleSpend(); return; }
     const back = e.target.closest(".wheel-card.back");
     if (back) { st.viewPhase = back.dataset.id; render(); }
@@ -848,15 +870,42 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     shiftPhase(dx > 0 ? 1 : -1);
     setTimeout(() => { wheelLock = false; }, 450);
   }, { passive: false });
-  // touch swipe via pointer events
-  let ptStartX = null;
-  $("wheelTrack").addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") ptStartX = e.clientX; });
-  $("wheelTrack").addEventListener("pointerup", (e) => {
-    if (ptStartX == null) return;
-    const dx = e.clientX - ptStartX; ptStartX = null;
-    if (Math.abs(dx) > 40) shiftPhase(dx < 0 ? 1 : -1);
+  // drag the stack with a mouse, pen or finger: the cards follow the pointer, and each time it has
+  // travelled one step the next phase comes to the front (drag left for later phases); at either end
+  // of the phases the cards only give a little. On release they ease back into place.
+  const cardDrag = { armed: false, on: false, justDragged: false };
+  const trackEl = $("wheelTrack"), railEl = $("wheelRail");
+  trackEl.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest("button, a, input, .tbl-wrap")) return;
+    Object.assign(cardDrag, { armed: true, on: false, x0: e.clientX, id: e.pointerId,
+      stepPx: Math.max(60, Math.min(200, railEl.clientWidth * 0.15)) });
   });
-  $("wheelTrack").addEventListener("pointercancel", () => { ptStartX = null; });
+  trackEl.addEventListener("pointermove", (e) => {
+    if (!cardDrag.armed || e.pointerId !== cardDrag.id) return;
+    let dx = e.clientX - cardDrag.x0;
+    if (!cardDrag.on) {
+      if (Math.abs(dx) < 6) return;
+      cardDrag.on = true; trackEl.classList.add("dragging"); railEl.classList.remove("settle");
+      trackEl.setPointerCapture(e.pointerId);
+    }
+    const ids = (st.meta?.phases || []).map((p) => p.id);
+    const idx = ids.indexOf(st.viewPhase || fold(nowT()).cur);
+    const d = dx < 0 ? 1 : -1;
+    if (Math.abs(dx) >= cardDrag.stepPx && idx + d >= 0 && idx + d < ids.length) {
+      shiftPhase(d); cardDrag.x0 -= d * cardDrag.stepPx; dx += d * cardDrag.stepPx;
+    }
+    const atEnd = idx + d < 0 || idx + d >= ids.length;
+    railEl.style.setProperty("--drag", `${(atEnd ? dx * 0.25 : dx * 0.6).toFixed(1)}px`);
+  });
+  const endCardDrag = (e) => {
+    if (!cardDrag.armed || e.pointerId !== cardDrag.id) return;
+    const was = cardDrag.on;
+    cardDrag.armed = false; cardDrag.on = false; trackEl.classList.remove("dragging");
+    railEl.classList.add("settle"); railEl.style.setProperty("--drag", "0px");
+    if (was) { cardDrag.justDragged = true; setTimeout(() => { cardDrag.justDragged = false; }, 0); }
+  };
+  trackEl.addEventListener("pointerup", endCardDrag);
+  trackEl.addEventListener("pointercancel", endCardDrag);
   let resizeTimer = 0;
   window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
   document.addEventListener("keydown", (e) => {
