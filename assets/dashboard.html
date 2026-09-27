@@ -95,6 +95,9 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .wheel-nav:hover { border-color: var(--accent); color: var(--accent); }
 .wheel-track { flex: 1; min-width: 0; overflow: hidden; touch-action: pan-y; cursor: grab; }
 .wheel-track.dragging { cursor: grabbing; user-select: none; }
+/* while dragging the cards trail the pointer by a moment, which also smooths the small recoil each time
+   the next phase steps to the front */
+.wheel-track.dragging .wheel-card { transition: translate .2s ease-out, transform .6s cubic-bezier(.45, 0, .2, 1), opacity .6s ease, border-color .3s; }
 /* the stack: one in-flow front card (which sets the stack's height) plus absolutely-positioned
    back cards layered behind it, each offset sideways by a fraction of its own (shared) width */
 /* every card is absolutely placed, so a change of front card is only a change of transform; the rail's
@@ -917,46 +920,38 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     shiftPhase(dx > 0 ? 1 : -1);
     setTimeout(() => { wheelLock = false; }, 450);
   }, { passive: false });
-  // drag the stack with a mouse, pen or finger: the cards follow the pointer, and on release the stack
-  // moves one phase per stretch of the drag (drag left for later phases) while the cards ease into their
-  // new places, so nothing snaps mid-drag. At either end of the phases the cards only give a little.
+  // drag the stack with a mouse, pen or finger: the cards follow the pointer, and each time it has
+  // travelled one step the next phase comes to the front (drag left for later phases) and slides into
+  // place while the drag goes on. At either end of the phases the cards only give a little.
   const cardDrag = { armed: false, on: false, justDragged: false };
   const trackEl = $("wheelTrack"), railEl = $("wheelRail");
   trackEl.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || e.target.closest("button, a, input, .tbl-wrap")) return;
-    const ids = (st.meta?.phases || []).map((p) => p.id);
-    Object.assign(cardDrag, { armed: true, on: false, x0: e.clientX, id: e.pointerId, ids,
-      idx0: Math.max(0, ids.indexOf(st.viewPhase || fold(nowT()).cur)),
-      stepPx: Math.max(60, Math.min(180, railEl.clientWidth * 0.12)) });
+    Object.assign(cardDrag, { armed: true, on: false, x0: e.clientX, id: e.pointerId,
+      stepPx: Math.max(60, Math.min(160, railEl.clientWidth * 0.12)) });
   });
-  const dragSteps = (dx) => {
-    const want = -Math.round(dx / cardDrag.stepPx);
-    return Math.min(cardDrag.ids.length - 1, Math.max(0, cardDrag.idx0 + want)) - cardDrag.idx0;
-  };
   trackEl.addEventListener("pointermove", (e) => {
     if (!cardDrag.armed || e.pointerId !== cardDrag.id) return;
-    const dx = e.clientX - cardDrag.x0;
+    let dx = e.clientX - cardDrag.x0;
     if (!cardDrag.on) {
       if (Math.abs(dx) < 6) return;
       cardDrag.on = true; trackEl.classList.add("dragging"); railEl.classList.remove("settle");
       trackEl.setPointerCapture(e.pointerId);
     }
-    // past the first or last phase the pull is damped, so the end of the stack is felt
-    const room = dx < 0 ? cardDrag.ids.length - 1 - cardDrag.idx0 : cardDrag.idx0;
-    const free = room * cardDrag.stepPx, over = Math.max(0, Math.abs(dx) - free);
-    const shown = Math.sign(dx) * (Math.min(Math.abs(dx), free) * 0.5 + over * 0.15);
-    railEl.style.setProperty("--drag", `${shown.toFixed(1)}px`);
+    const ids = (st.meta?.phases || []).map((p) => p.id);
+    const idx = ids.indexOf(st.viewPhase || fold(nowT()).cur);
+    const d = dx < 0 ? 1 : -1, canStep = idx + d >= 0 && idx + d < ids.length;
+    if (canStep && Math.abs(dx) >= cardDrag.stepPx) {
+      shiftPhase(d); cardDrag.x0 -= d * cardDrag.stepPx; dx += d * cardDrag.stepPx;
+    }
+    railEl.style.setProperty("--drag", `${(dx * (canStep ? 0.35 : 0.15)).toFixed(1)}px`);
   });
   const endCardDrag = (e) => {
     if (!cardDrag.armed || e.pointerId !== cardDrag.id) return;
     const was = cardDrag.on;
     cardDrag.armed = false; cardDrag.on = false; trackEl.classList.remove("dragging");
     railEl.classList.add("settle"); railEl.style.setProperty("--drag", "0px");
-    if (was) {
-      const d = dragSteps(e.clientX - cardDrag.x0);
-      if (d) shiftPhase(d);
-      cardDrag.justDragged = true; setTimeout(() => { cardDrag.justDragged = false; }, 0);
-    }
+    if (was) { cardDrag.justDragged = true; setTimeout(() => { cardDrag.justDragged = false; }, 0); }
   };
   trackEl.addEventListener("pointerup", endCardDrag);
   trackEl.addEventListener("pointercancel", endCardDrag);

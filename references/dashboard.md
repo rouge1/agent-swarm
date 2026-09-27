@@ -17,7 +17,7 @@
   out and fade), the Spend details table grows open and fades in, and the stack's height, and so the page
   below it, eases to the front card's height. Navigate with the large ‹ › buttons (hidden on
   narrow screens), `[`/`]` keys, trackpad/shift-wheel scroll, by dragging the cards left or right (mouse,
-  pen or finger; they follow the pointer and step one phase per stretch of the drag), or by clicking (or
+  pen or finger; they trail the pointer and the next phase slides to the front at each stretch of the drag), or by clicking (or
   Enter/Space on) a peeking card. The current phase's cell in the phase map pulses, so it is easy to find again (L or
   End goes back to live). The bake-off scorecard
   appears inside a phase card only while that phase has scored tasks that aren't all merged/dropped yet -- once
