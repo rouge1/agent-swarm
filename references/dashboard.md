@@ -4,14 +4,15 @@
 - header: project name, the clock, live/replay, and a theme disc that cycles Default (follows the system's
   light or dark setting), Slate, Reading Room and Walnut; the choice is remembered in the browser
 - **phase stack**: overlapping cards, `[1 [2 [3] 4] 5]`. Every phase card carries the full detail (eyebrow,
-  title, goal, "Done when", a stats row -- elapsed/runs/reruns/failed/spend -- and a **Spend ▸** chevron that
-  expands a per-agent spend table for that phase). The focused phase sits in front in the centre; its neighbours
+  title, goal, "Done when", a stats row -- elapsed/runs/reruns/failed/spend -- and a **Spend details ▸** button on
+  the left that expands a per-agent spend table, the full width of the card, for that phase). The focused phase sits in front in the centre; its neighbours
   are tucked behind it, completed to the left and future to the right (up to 2 per side on desktop, 1 on narrow
   screens), each one opaque, a little smaller and more veiled than the one in front of it, and pushed out just
   far enough to peek past it. Card text is centred; both side edges of every card carry the phase number in a
-  circle with the number spelled out below it in stacked letters (filled for the current phase, green when
+  circle with the number spelled out below it, one letter per line, spaced out wide for a short word and
+  closing up for a long one (filled for the current phase, green when
   done), so a card peeking from either side still says which phase it is (hidden on narrow screens, where
-  nothing peeks). Only the front card's Spend button is live. Navigate with the large ‹ › buttons (hidden on
+  nothing peeks). Only the front card shows its Spend details. Navigate with the large ‹ › buttons (hidden on
   narrow screens), `[`/`]` keys, trackpad/shift-wheel scroll, by dragging the cards left or right (mouse,
   pen or finger; they follow the pointer and step one phase per stretch of the drag), or by clicking (or
   Enter/Space on) a peeking card. The current phase's cell in the phase map pulses, so it is easy to find again (L or

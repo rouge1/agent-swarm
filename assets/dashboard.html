@@ -112,7 +112,8 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .wheel-card .edge.l { left: 16px; }
 .wheel-card .edge.r { right: 16px; }
 .edge .num { width: 30px; height: 30px; border-radius: 50%; border: 2px solid currentColor; display: grid; place-items: center; font: 700 14px/1 var(--mono); font-variant-numeric: tabular-nums; }
-.edge .word { writing-mode: vertical-lr; text-orientation: upright; font: 700 13px/1 var(--label); letter-spacing: -.12em; text-transform: uppercase; }
+/* one letter per line, spaced out wide for a short word and closing up as the word gets longer (--gap) */
+.edge .word { display: flex; flex-direction: column; align-items: center; gap: var(--gap, 0px); font: 700 var(--fs, 13px)/.9 var(--label); text-transform: uppercase; }
 .wheel-card.done .edge { color: var(--ok); }
 .wheel-card.active .edge { color: var(--accent); }
 .wheel-card.active .edge .num { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -137,9 +138,12 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .phase-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; row-gap: 8px; }
 .phase-stats div { display: grid; gap: 2px; text-align: center; }
 .phase-stats .v { font: 500 18px/1 var(--mono); font-variant-numeric: tabular-nums; }
-.spend-toggle { justify-self: center; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 5px 10px; font: 600 12px/1 var(--body); color: var(--ink); }
+.spend-toggle { justify-self: start; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 5px 10px; font: 600 12px/1 var(--body); color: var(--ink); }
 .spend-toggle:hover { border-color: var(--accent); }
+/* the card's side padding is room for the numbered edges; the spend button and table use the full width */
+.wheel-card .spend-toggle, .wheel-card .spend-detail { margin-inline: -42px; }
 .spend-detail { display: grid; gap: 6px; }
+.wheel-card.back .spend-toggle, .wheel-card.back .spend-detail { visibility: hidden; } /* only the front card's is live */
 .scorecard { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 8px; }
 .scorecard h3 { font-size: 14px; }
 .scorecard .panel-h { justify-content: center; }
@@ -226,7 +230,8 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
 @media (max-width: 720px) {
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .wheel-card { padding: 16px; }
-  .wheel-card .edge { display: none; } /* a phone's stack has no room to peek into */
+  .wheel-card .edge { display: none; }
+  .wheel-card .spend-toggle, .wheel-card .spend-detail { margin-inline: 0; } /* a phone's stack has no room to peek into */
   .wheel-nav { display: none; } /* swipe, the peeking card and the phase map below all move the stack */
   .player .in { grid-template-columns: 1fr; gap: 8px; }
   .ptime { text-align: left; }
@@ -517,7 +522,10 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   const ONES = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",
     "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
   const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const numberWord = (n) => n < 20 ? ONES[n] : n < 100 ? TENS[Math.floor(n / 10)] + (n % 10 ? ONES[n % 10] : "") : String(n);
+  const numberWord = (n) => n < 20 ? ONES[n] : n < 100 ? TENS[Math.floor(n / 10)] + (n % 10 ? "-" + ONES[n % 10] : "") : String(n);
+
+  // short words spread out, long ones close up (and, past nine letters, shrink) to stay clear of the Spend button
+  const letterStyle = (n) => n <= 9 ? `--gap:${n <= 3 ? 24 : n <= 4 ? 18 : n <= 5 ? 12 : n <= 7 ? 6 : 2}px` : "--gap:-1px;--fs:11px";
 
   function renderWheel(s, phases, view, curId, T) {
     const rail = $("wheelRail");
@@ -551,7 +559,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
         style += `--dir:${Math.sign(off)};--s:${scale};--peek:${peek};--veil:${veil};`;
       }
       const toggleAttrs = isFront ? `id="spendToggle" aria-expanded="${st.spendExpanded}"` : `inert tabindex="-1" aria-hidden="true"`;
-      const edge = (side) => `<span class="edge ${side}" aria-hidden="true"><span class="num">${i}</span><span class="word">${numberWord(i)}</span></span>`;
+      const edge = (side) => `<span class="edge ${side}" aria-hidden="true"><span class="num">${i}</span><span class="word" style="${letterStyle(numberWord(i).length)}">${[...numberWord(i)].map((c) => `<span>${c}</span>`).join("")}</span></span>`;
       const inner = `${edge("l")}${edge("r")}<span class="phase-tag">Phase ${i} · ${esc(p.id.toUpperCase())} · <b class="${cls}">${label}</b></span>
         <h2>${esc(p.title)}<span>.</span></h2>
         <p>${esc(p.goal)}</p>
@@ -563,7 +571,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
           <div><span class="eyebrow">Failed</span><span class="v">${failed}</span></div>
           <div><span class="eyebrow">Spend</span><span class="v">${fmtC(cost)}</span></div>
         </div>
-        <button class="spend-toggle" ${toggleAttrs}>Spend ${st.spendExpanded ? "▾" : "▸"}</button>
+        <button class="spend-toggle" ${toggleAttrs}>Spend details ${st.spendExpanded ? "▾" : "▸"}</button>
         <div class="spend-detail" ${st.spendExpanded ? "" : "hidden"}>
           <div class="tbl-wrap"><table>${phaseSpendTableHtml(s, p.id)}</table></div>
         </div>
