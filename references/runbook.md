@@ -57,6 +57,12 @@ about 15 s, then wait with one blocking loop.
 To find a session for a fix round:
 `grep '"<phase>"' data/ledger.jsonl | grep '"task": "<task>"' | grep -oE '"session": "[^"]*"' | head -1`
 
+## Scribe
+If the launch prompt names a scribe, relaunch it between your own steps, about every 5 minutes while workers
+run: a cheap model with `prompts/scribe.md`, in the background, never waited on. It only writes board events.
+Read its trouble notes in `swarm.py agents` / the feed like any other signal; crashed runs are yours to
+`recover`.
+
 ## The phase, step by step
 
 ### 1. Tests first

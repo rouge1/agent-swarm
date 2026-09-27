@@ -15,4 +15,7 @@ pushing and report">. Nothing else outward.
 Dashboard: <"local board, already refreshed by `swarm.py watch`: nothing to do" | "push with ArtifactData to
 <url> at milestones" | "none">.
 
+Scribe: <"relaunch a <cheap model> scribe with <OPS>/prompts/scribe.md about every 5 minutes while workers run"
+| "none: the watch timer only">.
+
 FINAL REPORT: as in the runbook's "Final report" section, under 250 words.

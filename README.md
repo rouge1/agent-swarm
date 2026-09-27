@@ -78,7 +78,10 @@ It reads its data from whichever of these it finds first:
   `swarm.py watch --serve 8765` rewrites the folder (`out/site/`) every 30 seconds and serves it on this
   machine only, at http://127.0.0.1:8765/.
 
-`references/dashboard.md` has the details.
+Task cards and worker lanes show what each working agent is doing: its latest action, read from the
+agent's own log by `watch`, and a one-line summary written by the scribe, a cheap agent that reads every
+other agent's recent actions a few times an hour (`templates/prompts/scribe.md`). `references/dashboard.md`
+has the details.
 
 ## Layout
 
@@ -87,7 +90,8 @@ SKILL.md               the orchestrator's instructions (start here)
 swarm.toml.example     config template: paths, forbidden dirs, models and drivers, phases, prices
 examples/              a filled-in config (paths are placeholders)
 scripts/swarm.py       ops CLI: init, wt, run, task, note, review, tests, score, crew, phase,
-                       health, cost, status, claude, site, watch, push, export, sync, recover
+                       health, cost, status, claude, scan, agents, activity, log-run, site,
+                       watch, push, export, sync, recover
 scripts/screenshot.py  Playwright screenshots, video and console errors from a JSON step list
 scripts/tests/         driver tests (a fake Grok CLI stands in for the real one)
 assets/dashboard.html  live dashboard and replay page
@@ -99,9 +103,8 @@ docs/requirements.md   where the project is heading
 ## Status
 
 Working, and still being generalised. The goal is to run under any orchestrator (Claude Code, Grok or
-OpenCode), with the local dashboard kept current by a separate "scribe" agent. See
-[`docs/requirements.md`](docs/requirements.md).
+OpenCode). The standalone board and the scribe are in; see [`docs/requirements.md`](docs/requirements.md).
 
 Run the tests with:
 
-    python3 -m pytest -q scripts/tests
+    python3 -m unittest discover -s scripts/tests

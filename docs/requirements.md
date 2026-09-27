@@ -12,6 +12,17 @@ After whichhf ships, the `opencode-swarm` skill used here becomes its own projec
 2. **The website is standalone.** No claude.ai Artifact, no claude.ai database. A static page served locally (stdlib HTTP server or a plain file) that reads the event log and refreshes itself on a timer. The shareable replay stays a single self-contained HTML file.
 3. **A separate agent keeps the website current.** A cheap “scribe” agent (any model, any CLI) reads the status of every other agent and writes events; the page only reads. The scribe’s scripted parts (activity scan, cost tally) run without an LLM so they can also run on a timer.
 
+## Status
+
+- 2 (standalone website): done. `swarm.py watch --serve 8765` writes and serves the board; `export` still
+  writes the single-file replay.
+- 3 (scribe): done. The scripted parts (`scan`, the Claude tally, `site`) run on the `watch` timer; the
+  scribe agent (`templates/prompts/scribe.md`) adds summaries, trouble notes and unlogged Claude runs
+  through `agents`, `activity`, `note` and `log-run`.
+- Activity per runtime: Grok and OpenCode are read from the run logs of `swarm.py run` (every worker goes
+  through it), so `grok sessions list` / `grok export` aren't needed; Claude subagents from their
+  transcripts.
+
 ## Design notes from this build
 
 ### Workers: one driver per CLI

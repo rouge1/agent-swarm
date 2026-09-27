@@ -25,7 +25,7 @@ Read `references/lessons.md` before a first run. It explains why the process loo
 | Workers | 2–4 models from `[[models]]` | Implement tasks, write tests, fix their own review findings | Touch files outside their task, or anything outside their worktree |
 | Reviewers | Models that did not write the code | Read-only review in a detached worktree | Edit files |
 | Consensus / triage | A third model's run | Check every review claim against the code; diagnose stalled runs | Edit files |
-| Scribe | A cheap agent or a timer | Keeps the dashboard current from the event log and each agent's status | Change code or task state |
+| Scribe | A cheap agent (any model, any CLI) on top of the `watch` timer | Reads what every other agent is doing and writes it to the board: summaries, trouble notes, unlogged Claude runs (`templates/prompts/scribe.md`) | Change code, files or task state |
 
 Under Claude Code the usual mapping is Opus as planner, Sonnet as phase manager and Haiku as checklist agent and
 scribe. Under another orchestrator, use its strongest model as planner and cheaper ones below it.
@@ -55,7 +55,8 @@ agent-swarm/
   swarm.toml.example           config template (commented): paths, forbidden dirs, models and drivers, phases, prices
   examples/textstats.swarm.toml  a filled-in config from a live test project (paths are placeholders)
   scripts/swarm.py             ops CLI (stdlib only): init, wt, run, task, note, review, tests, score, crew,
-                               phase, health, cost, status, claude, site, watch, push, export, sync, recover
+                               phase, health, cost, status, claude, scan, agents, activity, log-run, site,
+                               watch, push, export, sync, recover
   scripts/screenshot.py        Playwright screenshots, video and console errors from a JSON step list
   scripts/tests/               driver tests (a fake Grok CLI stands in for the real one)
   assets/dashboard.html        live dashboard and replay page (local, embedded replay, or claude.ai Artifact)
@@ -67,7 +68,7 @@ agent-swarm/
   templates/AGENTS.md          worker rules (copy into the project repo root)
   templates/spec.md            phase spec skeleton
   templates/prompts/           manager-launch, test-author, task, review, review-tests, review-ui,
-                               consensus, fix, triage
+                               consensus, fix, triage, scribe
   docs/requirements.md         where the project is heading
 ```
 
@@ -131,6 +132,26 @@ the activity feed, live or as a replay. It needs no service: `swarm.py watch --s
 (127.0.0.1); the page polls the two files every 5 seconds. `swarm.py site` writes the folder once. `swarm.py
 export` writes a single offline replay file to share, and a claude.ai Artifact board is also supported. See
 `references/dashboard.md`.
+
+Task cards and worker lanes also show what each working agent is doing. `watch` scans every in-flight
+agent's own log each pass (Grok and OpenCode run logs, Claude subagent transcripts) and logs its latest
+action. For Claude subagents to be found, start each one's description with `[<phase>:<task>]`.
+
+## Scribe
+
+The scribe keeps the board telling the story, not just the numbers. Its scripted half is the `watch` timer.
+Its judgement half is a cheap agent that runs one pass of `templates/prompts/scribe.md` (filled in) every
+few minutes while a phase runs. It reads `swarm.py agents`, writes a one-line summary per agent
+(`swarm.py activity`), flags crashed, quiet or looping agents as feed notes, and logs finished Claude
+subagent runs nobody logged (`swarm.py log-run`). It never touches code, files or task status.
+
+- **Claude Code:** a Haiku subagent in the background with the filled-in prompt, relaunched every ~5 minutes
+  by the phase manager between its own steps (or `/loop 5m`).
+- **OpenCode or Grok:** a headless run of a cheap model with the prompt, from a timer (cron, a shell loop),
+  with its working directory set to the ops dir. It needs shell access for `swarm.py` only; give it a
+  permission profile that allows `python3 <skill>/scripts/swarm.py` and nothing else that writes.
+- **No scribe agent:** `watch` alone still keeps the board live; cards show the latest action without a
+  summary.
 
 ## Hard rules
 
