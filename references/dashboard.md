@@ -1,7 +1,8 @@
 # Dashboard and replay
 
 `assets/dashboard.html` shows everything that happened in the event log, top to bottom:
-- header: project name and brand
+- header: project name, the clock, live/replay, and a theme disc that cycles Default (follows the system's
+  light or dark setting), Slate, Reading Room and Walnut; the choice is remembered in the browser
 - **phase stack**: overlapping cards, `[1 [2 [3] 4] 5]`. Every phase card carries the full detail (eyebrow,
   title, goal, "Done when", a stats row -- elapsed/runs/reruns/failed/spend -- and a **Spend ▸** chevron that
   expands a per-agent spend table for that phase). The focused phase sits in front in the centre; its neighbours
@@ -13,7 +14,8 @@
   appears inside a phase card only while that phase has scored tasks that aren't all merged/dropped yet -- once
   settled it disappears.
 - **phase map**: every phase as a tiny numbered cell, coloured by status, with a window box outlining exactly the
-  phases currently in the stack; click a cell to focus that phase
+  phases currently in the stack; click a cell to focus that phase, or drag the window along the map and
+  the stack follows, card by card, with the cards sliding into place
 - **task board** for the focused phase: queued, in progress, in review, done
 - **worker lanes**: the orchestrator plus one lane per model, with live "doing"/idle status and that lane's
   totals for the focused phase

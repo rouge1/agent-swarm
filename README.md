@@ -69,6 +69,7 @@ a first run: it explains why the process looks the way it does and where the mon
 - a task board for the focused phase
 - worker lanes, spend per model and phase, and the activity feed
 - a replay player
+- four themes: Default (light or dark, following the system), Slate, Reading Room and Walnut
 
 It reads its data from whichever of these it finds first:
 - **Replay:** `swarm.py export` writes a single offline HTML file with every event embedded, ready to share.
