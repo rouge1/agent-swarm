@@ -284,7 +284,7 @@ class TestRefusals(GrokDriverTestBase):
             self.run_grok(model_key="sonnetw")
         msg = str(cm.exception)
         self.assertIn("driver=claude", msg)
-        self.assertIn("Agent-tool subagent", msg)
+        self.assertIn("swarm.py log-run", msg)
 
 
 class TestFinalize(GrokDriverTestBase):

@@ -38,6 +38,8 @@ OpenCode runs cost cents.
 | `swarm.py wt <phase> <name> --detach <branch>` | Read-only review worktree `rv-<name>` |
 | `swarm.py run <phase> <task> <model> --dir <wt> --prompt-file prompts/<f>.md [--session S] [--timeout 1800]` | Run a worker. The last line of its output is JSON with exit, cost, wall_s, session |
 | `... --text-out data/reviews/<f>.md --kind review` | Same, for reviewers: saves the final answer to a file |
+| Claude subagent workers (`driver = "claude"`) | Start the subagent's description with `[<phase>:<task>]` (add `:<model>` in a bake-off) so the board can show what it is doing; set its task to `working`, and when it finishes `swarm.py log-run <phase> <task> <model> --wall S [--exit C] [--outcome ..] [--reason ..]` |
+| `swarm.py agents` | Every agent working now and its last few actions (tool calls, answer text) |
 | `swarm.py task <phase> <task> <queued\|working\|review\|fixing\|merged\|failed\|dropped> [--model m] [--note ..]` | Update a task card (`run` sets working/review itself) |
 | `swarm.py note "<text>"` | Add a line to the activity feed |
 | `swarm.py score <phase> <task> <model> <0-100> --summary ".."` | Bake-off score |

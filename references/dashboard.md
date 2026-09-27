@@ -35,6 +35,14 @@
   focused phase, R restarts. During replay the focused phase follows the replayed current phase unless you've
   moved away (L or End brings the focus back to the current phase).
 
+**What each agent is doing.** A working task's card, and its worker's lane, show two lines: the scribe's
+summary in plain words, and underneath it the agent's latest action (`now: bash · pytest -q`, with how long
+it has been going once that passes two minutes). Both come from `activity` events: `swarm.py scan` (run by
+every `watch` pass) reads the run log of each `swarm.py run` still going (Grok and OpenCode workers) and the
+transcripts of Claude subagents whose description starts with `[<phase>:<task>]`, and logs the latest action
+when it changes; the scribe adds the summary with `swarm.py activity`. Activity never appears in the feed,
+and both lines clear when the task changes status.
+
 Claude lanes (their spend comes from the `claude` transcript tally, not worker `run` events) are any
 `meta.models` entry with `driver: "claude"` -- there's no hard-coded model key or price-key map. The orchestrator
 lane's role line comes from an optional `[project] orchestrator` string in `swarm.toml` (falls back to a generic
@@ -54,7 +62,7 @@ claude.ai `db` capability, or -- for a standalone deployment with no database --
 
     python3 scripts/swarm.py watch --serve 8765     # then open http://127.0.0.1:8765/
 
-`watch` does one pass every 30 seconds (`--every N`): the Claude transcript tally (skipped when
+`watch` does one pass every 30 seconds (`--every N`): the activity scan, the Claude transcript tally (skipped when
 `claude.session_dir` doesn't exist, or with `--no-claude`), then the board folder, `<ops>/out/site/` by default
 (`--out DIR`). `--serve PORT` also serves that folder from the same process, bound to 127.0.0.1 (`--bind` to
 change it; keep it on this machine unless the user asks otherwise). `--once` does a single pass and exits;

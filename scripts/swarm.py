@@ -331,8 +331,8 @@ def cmd_run(a):
     model = MODELS[a.model]
     driver = model.get("driver", "opencode")
     if driver == "claude":
-        sys.exit(f"refusing to run '{a.model}': driver=claude workers are Agent-tool subagents "
-                 "Claude runs directly and logs via the scribe, not launched by `swarm.py run`")
+        sys.exit(f"refusing to run '{a.model}': driver=claude workers are subagents the orchestrator runs "
+                 "itself; log their runs with `swarm.py log-run`")
     if driver == "grok" and not GROK_SANDBOX and not GROK_ALLOW_UNSANDBOXED:
         sys.exit("grok driver needs a sandbox profile; set [grok] sandbox or allow_unsandboxed = true")
     kind = a.kind or ("fix" if a.session else "build")
@@ -777,6 +777,263 @@ def cmd_export(a):
     print(out)
 
 
+# ---------------------------------------------------------------- activity scan
+#
+# What each in-flight agent is doing, read from what its runtime already writes: the run log of every
+# `swarm.py run` still going (Grok and OpenCode workers), and the transcripts of Claude subagents whose
+# description starts with a [<phase>:<task>] or [<phase>:<task>:<model>] tag. `scan` logs a change of an
+# agent's latest action as an `activity` event (the board shows it on the task card and the worker lane,
+# never in the feed); `agents` lists the in-flight agents with their recent actions for the scribe.
+
+TAG = re.compile(r"^\[(?P<phase>[\w.-]+):(?P<task>[\w.-]+)(?::(?P<model>[\w.-]+))?\]")
+ACTIVE = ("working", "fixing")
+WRITING = "writing its answer"
+
+
+def _tail_lines(path: Path, max_bytes: int = 256_000) -> list[str]:
+    """The last lines of a (possibly large, still growing) log; a cut first line is dropped."""
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        f.seek(max(0, size - max_bytes))
+        lines = f.read().decode("utf-8", "replace").splitlines()
+    return lines[1:] if size > max_bytes else lines
+
+
+def _json_lines(path: Path) -> list[dict]:
+    out = []
+    for line in _tail_lines(path):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                pass
+    return out
+
+
+def _trim_paths(text: str, roots: list[str]) -> str:
+    for root in sorted((r for r in roots if r), key=len, reverse=True):
+        text = text.replace(root.rstrip("/") + "/", "").replace(root, ".")
+    return text
+
+
+def describe_tool(name: str, inp: dict | None, roots: list[str]) -> str:
+    """`Bash · Run the tests`: the tool, then the most telling input, with the worktree paths trimmed."""
+    inp = inp if isinstance(inp, dict) else {}
+    detail = next((inp[k] for k in ("description", "file_path", "target_file", "path", "pattern", "command",
+                                     "query", "url", "prompt") if inp.get(k)), "")
+    detail = _trim_paths(str(detail).strip(), roots)
+    detail = detail.splitlines()[0][:90] if detail else ""
+    return f"{name} · {detail}" if detail else name
+
+
+def _said(text: str, roots: list[str]) -> tuple[str, str]:
+    return ("text", " ".join(_trim_paths(text, roots).split())[:160])
+
+
+def claude_actions(transcript: Path, roots: list[str]) -> list[tuple[str, str]]:
+    """(kind, text) per action in a Claude transcript, oldest first: kind is "tool" or "text"."""
+    out = []
+    for d in _json_lines(transcript):
+        content = (d.get("message") or {}).get("content")
+        if d.get("type") != "assistant" or not isinstance(content, list):
+            continue
+        for block in content:
+            if block.get("type") == "tool_use":
+                out.append(("tool", describe_tool(block.get("name", "?"), block.get("input"), roots)))
+            elif block.get("type") == "text" and block.get("text", "").strip():
+                out.append(_said(block["text"], roots))
+    return out
+
+
+def grok_actions(log: Path, roots: list[str]) -> list[tuple[str, str]]:
+    """From a streaming-json run log: tool calls, and each stretch of streamed answer text as one entry."""
+    out, text = [], []
+    for ev in _json_lines(log):
+        t = ev.get("type")
+        if t == "text" and ev.get("data"):
+            text.append(ev["data"])
+            continue
+        if t in ("tool_call", "end") and "".join(text).strip():
+            out.append(_said("".join(text), roots))
+            text = []
+        if t == "tool_call":
+            out.append(("tool", describe_tool(ev.get("toolName") or ev.get("title") or "?", ev.get("rawInput"), roots)))
+    if "".join(text).strip():
+        out.append(_said("".join(text), roots))
+    return out
+
+
+def opencode_actions(log: Path, roots: list[str]) -> list[tuple[str, str]]:
+    """From an `opencode run --format json` log: `tool_use` lines carry the finished tool part."""
+    out = []
+    for ev in _json_lines(log):
+        part = ev.get("part") or {}
+        if part.get("type") == "tool":
+            out.append(("tool", describe_tool(part.get("tool", "?"), (part.get("state") or {}).get("input"), roots)))
+        elif part.get("type") == "text" and str(part.get("text", "")).strip():
+            out.append(_said(part["text"], roots))
+    return out
+
+
+def latest(actions: list[tuple[str, str]]) -> str | None:
+    """The line the board shows: the latest tool call, or WRITING once answer text follows it."""
+    if not actions:
+        return None
+    kind, text = actions[-1]
+    return text if kind == "tool" else WRITING
+
+
+def _claude_subagent_dirs(events: list[dict]) -> list[Path]:
+    if CLAUDE_SESSION:
+        return [SESSION_DIR / CLAUDE_SESSION / "subagents"]
+    if not events or not SESSION_DIR.is_dir():
+        return []
+    since = events[0]["t"] / 1000.0
+    return sorted(d for d in SESSION_DIR.glob("*/subagents") if d.stat().st_mtime >= since)
+
+
+def _claude_span(transcript: Path) -> tuple[int | None, int | None, bool]:
+    """First and last message times (ms) of a transcript, and whether its last turn ended the agent's work
+    (a final answer with no tool call pending)."""
+    from datetime import datetime
+
+    times, ended = [], False
+    for d in _json_lines(transcript):
+        ts = d.get("timestamp")
+        if ts:
+            times.append(int(datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() * 1000))
+        m = d.get("message") or {}
+        if d.get("type") == "assistant" and isinstance(m.get("content"), list):
+            ended = m.get("stop_reason") == "end_turn" and not any(b.get("type") == "tool_use" for b in m["content"])
+        elif d.get("type") == "user":
+            ended = False
+    return (times[0] if times else None), (times[-1] if times else None), ended
+
+
+def in_flight(events: list[dict] | None = None) -> list[dict]:
+    """Every agent working now: {phase, task, model, runtime, status, log, idle_s, actions, doing, ...}.
+    Runs from `swarm.py run` also carry pid/alive; Claude subagents carry started/last/ended and whether a
+    `run` event has been logged for this stretch of work yet."""
+    events = load_events() if events is None else events
+    repo = CFG.get("project", {}).get("repo", "")
+    tasks: dict[tuple, dict] = {}
+    for e in events:
+        if e["type"] == "task":
+            tasks.setdefault((e["phase"], e["task"], e.get("model")), {}).update(e)
+    agents = []
+
+    starts, ended = {}, set()
+    for e in events:
+        if e["type"] == "run_start":
+            starts[e["log"]] = e
+        elif e["type"] == "run_end":
+            ended.add(e["log"])
+    for log_s, e in starts.items():
+        log = Path(log_s)
+        if log_s in ended or not log.exists():
+            continue
+        driver = MODELS.get(e["model"], {}).get("driver", "opencode")
+        read = grok_actions if driver == "grok" else opencode_actions
+        acts = read(log, [e.get("dir", ""), repo])
+        pid = e.get("pid")
+        agents.append({"phase": e["phase"], "task": e["task"], "model": e["model"], "runtime": driver,
+                       "status": tasks.get((e["phase"], e["task"], e["model"]), {}).get("status", "working"),
+                       "log": log_s, "idle_s": int(time.time() - log.stat().st_mtime), "pid": pid,
+                       "alive": bool(pid) and _pid_alive(pid), "actions": acts, "doing": latest(acts)})
+
+    for sub in _claude_subagent_dirs(events):
+        for meta_f in sorted(sub.glob("agent-*.meta.json")):
+            try:
+                m = TAG.match(json.loads(meta_f.read_text()).get("description", ""))
+            except (OSError, ValueError):
+                continue
+            transcript = meta_f.with_name(meta_f.name.replace(".meta.json", ".jsonl"))
+            if not m or not transcript.exists():
+                continue
+            owners = [k for k, t in tasks.items() if k[:2] == (m["phase"], m["task"])
+                      and t["status"] in ACTIVE and (not m["model"] or k[2] == m["model"])]
+            if len(owners) != 1:  # not working now, or several workers and the tag doesn't say which
+                continue
+            key = owners[0]
+            acts = claude_actions(transcript, [repo])
+            started, last, done = _claude_span(transcript)
+            since = tasks[key].get("t", 0)
+            logged = any(e["type"] == "run" and (e["phase"], e["task"], e.get("model")) == key and e["t"] >= since
+                         for e in events)
+            agents.append({"phase": key[0], "task": key[1], "model": key[2], "runtime": "claude",
+                           "status": tasks[key]["status"], "log": str(transcript),
+                           "idle_s": int(time.time() - transcript.stat().st_mtime), "actions": acts,
+                           "doing": latest(acts), "started": started, "last": last, "ended": done,
+                           "run_logged": logged})
+    return agents
+
+
+def scan_activity(events: list[dict] | None = None) -> int:
+    """Log an `activity` event for every in-flight agent whose latest action changed; return how many."""
+    events = load_events() if events is None else events
+    last = {}
+    for e in events:
+        if e["type"] == "activity" and e.get("doing"):
+            last[(e["phase"], e["task"], e.get("model"))] = e["doing"]
+    changed = 0
+    for ag in in_flight(events):
+        key = (ag["phase"], ag["task"], ag["model"])
+        if ag["doing"] and ag["doing"] != last.get(key):
+            emit({"type": "activity", "phase": ag["phase"], "task": ag["task"], "model": ag["model"],
+                  "runtime": ag["runtime"], "doing": ag["doing"]})
+            changed += 1
+    return changed
+
+
+def cmd_scan(a):
+    print(f"activity events logged: {scan_activity()}")
+
+
+def cmd_agents(a):
+    """In-flight agents with their recent actions: the scribe's reading, or a quick look for a person."""
+    agents = in_flight()
+    for ag in agents:
+        ag["actions"] = [f"{'said: ' if k == 'text' else ''}{t}" for k, t in ag["actions"][-a.tail:]]
+    if a.json:
+        print(json.dumps(agents, indent=1))
+        return
+    if not agents:
+        print("no agents working")
+        return
+    for ag in agents:
+        flags = []
+        if ag.get("pid") and not ag.get("alive"):
+            flags.append("CRASHED")
+        if ag["idle_s"] > 600:
+            flags.append(f"quiet {ag['idle_s'] // 60}m")
+        if ag.get("ended"):
+            flags.append("finished" + ("" if ag.get("run_logged") else ", run not logged"))
+        print(f"{ag['phase']}/{ag['task']} {ag['model']} ({ag['runtime']}, {ag['status']})"
+              + (f"  [{'; '.join(flags)}]" if flags else ""))
+        for act in ag["actions"]:
+            print(f"    {act}")
+
+
+def cmd_activity(a):
+    """The scribe's plain-words summary of what an agent is doing; the board shows it on the card and lane."""
+    emit({"type": "activity", "phase": a.phase, "task": a.task, "model": a.model, "summary": a.summary,
+          "who": a.who})
+
+
+def cmd_log_run(a):
+    """Log a run swarm.py didn't launch (a Claude subagent, say), so the board counts it: runs, reruns,
+    failures. Its tokens and cost come from `swarm.py claude`, so they default to 0 here."""
+    outcome = a.outcome or ("ok" if a.exit == 0 else "error")
+    ev = {"type": "run", "phase": a.phase, "task": a.task, "model": a.model, "kind": a.kind, "wall_s": a.wall,
+          "model_s": a.wall, "tokens_in": a.tokens, "tokens_out": 0, "cost": a.cost, "exit": a.exit,
+          "outcome": outcome}
+    if a.reason:
+        ev["reason"] = a.reason
+    print(json.dumps(emit(ev)))
+
+
 # ---------------------------------------------------------------- standalone board
 
 
@@ -833,7 +1090,8 @@ def _serve(site: Path, port: int, bind: str) -> None:
 
 
 def watch_pass(site: Path, tally: bool) -> None:
-    """One refresh of the board: Claude tally (when there is a session to read), then the site files."""
+    """One refresh of the board: activity scan, Claude tally (when there is a session to read), site files."""
+    scan_activity()
     if tally and SESSION_DIR.is_dir():
         claude_tally(CLAUDE_SESSION)
     write_site(site)
@@ -1092,6 +1350,27 @@ def build_parser() -> argparse.ArgumentParser:
     default_out = str(OUT / f"{_slugify(CFG.get('project', {}).get('name', 'swarm'))}-replay.html") if OUT else None
     s.add_argument("--out", default=default_out, required=default_out is None)
     s.set_defaults(fn=cmd_export)
+
+    s = sub.add_parser("scan", help="log what each in-flight agent is doing now (activity events)")
+    s.set_defaults(fn=cmd_scan)
+
+    s = sub.add_parser("agents", help="in-flight agents with their recent actions")
+    s.add_argument("--tail", type=int, default=8, help="recent actions per agent (default 8)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_agents)
+
+    s = sub.add_parser("activity", help="log a plain-words summary of what an agent is doing")
+    s.add_argument("phase"); s.add_argument("task"); s.add_argument("model"); s.add_argument("summary")
+    s.add_argument("--who", default="scribe"); s.set_defaults(fn=cmd_activity)
+
+    s = sub.add_parser("log-run", help="log a run swarm.py didn't launch (e.g. a Claude subagent)")
+    s.add_argument("phase"); s.add_argument("task"); s.add_argument("model")
+    s.add_argument("--kind", default="build"); s.add_argument("--wall", type=float, required=True)
+    s.add_argument("--tokens", type=int, default=0); s.add_argument("--cost", type=float, default=0.0)
+    s.add_argument("--exit", type=int, default=0)
+    s.add_argument("--outcome", choices=["ok", "rejected", "timeout", "error"])
+    s.add_argument("--reason", default="")
+    s.set_defaults(fn=cmd_log_run)
 
     s = sub.add_parser("site", help="write the standalone board (index.html, meta.json, events.json)")
     s.add_argument("--out", help="board folder (default: <ops>/out/site)")

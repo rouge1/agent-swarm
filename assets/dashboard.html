@@ -197,6 +197,11 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .card { border: 1px solid var(--line); border-left: 4px solid var(--c, var(--line)); background: var(--panel-2); border-radius: 8px; padding: 9px 10px; display: grid; gap: 5px; font-size: 12.5px; }
 .card .ttl { font-weight: 600; font-size: 13px; line-height: 1.25; word-break: break-word; }
 .card .row { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 11.5px; }
+/* what a working agent is doing: the scribe's summary in plain words, then its latest action */
+.card .now, .lane .now { display: grid; gap: 2px; font-size: 11.5px; line-height: 1.35; border-left: 2px solid var(--c, var(--line)); padding-left: 8px; }
+.lane .now { margin-top: 6px; }
+.now .say { color: var(--ink); }
+.now .act { color: var(--muted); font-family: var(--mono); font-size: 10.5px; overflow-wrap: anywhere; }
 .card.dropped { opacity: .6; }
 .card.failed { border-color: var(--bug); }
 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 7px 1px 5px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); color: var(--c); background: color-mix(in srgb, var(--c) 10%, transparent); white-space: nowrap; }
@@ -401,7 +406,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
           s.phases[e.phase] = { status: e.status, t: prev?.t ?? e.t, end: e.status === "done" ? e.t : undefined };
           if (e.status === "active") s.cur = e.phase; break;
         }
-        case "task": { const t = task(); if (e.status !== t.status) t.since = e.t; t.status = e.status; if (e.title) t.title = e.title; if ("note" in e) t.note = e.note; break; }
+        case "task": { const t = task(); if (e.status !== t.status) { t.since = e.t; t.doing = t.say = null; } t.status = e.status; if (e.title) t.title = e.title; if ("note" in e) t.note = e.note; break; }
         case "run": {
           const t = task(); const rerun = t.runs > 0 ? 1 : 0, bad = runFailed(e) ? 1 : 0;
           t.runs++; t.reruns += rerun; t.failed += bad; t.fixes += e.kind === "fix"; t.cost += e.cost || 0; t.wall += e.wall_s || 0;
@@ -412,6 +417,9 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
         case "tests": task().tests = e; break;
         case "score": task().score = e.score; s.scores.push(e); break;
         case "crew": s.crew[e.who] = e; break;
+        case "activity": { // the scan's latest action and the scribe's summary; shown on cards and lanes, not in the feed
+          const t = task(); if (e.doing) t.doing = { text: e.doing, t: e.t }; if (e.summary) t.say = { text: e.summary, t: e.t }; continue;
+        }
         case "claude": s.claude[`${e.phase}|${e.role}|${e.model}`] = e; continue; // tallies stay out of the feed
         case "run_start": case "run_end": continue; // ops bookkeeping only (see `swarm.py health`)
       }
@@ -564,6 +572,13 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   // and layered behind the one closer to the centre. All of it is transform/opacity, so a change of
   // focus slides the same card elements into their new places; cards joining the stack slide in from
   // outside it and cards leaving slide out and fade before they are removed.
+  // a working agent's summary and latest action, with how long the action has been going when it's a while
+  function nowHtml(t, T) {
+    if (!["working", "fixing"].includes(t.status) || !(t.doing || t.say)) return "";
+    const age = t.doing ? (T - t.doing.t) / 1000 : 0;
+    return `<div class="now">${t.say ? `<span class="say">${esc(t.say.text)}</span>` : ""}${t.doing ? `<span class="act">now: ${esc(t.doing.text)}${age >= 120 ? ` · ${fmtS(age)}` : ""}</span>` : ""}</div>`;
+  }
+
   function renderWheel(s, phases, view, curId, T) {
     const rail = $("wheelRail");
     if (!phases.length) { rail.innerHTML = ""; rail.style.height = "0"; return; }
@@ -708,7 +723,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
         if (c?.state === "busy") { busy = true; doing = esc(c.doing); since = c.t; }
       } else {
         const act = tasks.filter((t) => t.model === l.key && (t.status === "working" || t.status === "fixing")).sort((a, b) => b.since - a.since)[0];
-        if (act) { busy = true; since = act.since; doing = `${act.status === "fixing" ? "Fixing" : "Building"} <b>${esc(act.title || act.task)}</b> <span class="mono" style="color:var(--muted)">${esc(act.phase.toUpperCase())}</span>`; }
+        if (act) { busy = true; since = act.since; doing = `${act.status === "fixing" ? "Fixing" : "Building"} <b>${esc(act.title || act.task)}</b> <span class="mono" style="color:var(--muted)">${esc(act.phase.toUpperCase())}</span>${nowHtml(act, T)}`; }
       }
       let metaRight = `<span></span>`;
       if (!CREW_KEYS.has(l.key)) {
@@ -747,6 +762,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
         <div class="row"><span class="chip" style="--c:${colorOf(t.model)}">${esc(modelName(t.model))}</span><span class="pill" style="--s:${sc}">${label}</span></div>
         ${bits.length ? `<div class="row num">${bits.join(" · ")}</div>` : ""}
         ${t.note ? `<div class="row">${esc(t.note)}</div>` : ""}
+        ${nowHtml(t, T)}
       </div>`;
     }
 
