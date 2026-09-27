@@ -97,15 +97,18 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .wheel-track.dragging { cursor: grabbing; user-select: none; }
 /* the stack: one in-flow front card (which sets the stack's height) plus absolutely-positioned
    back cards layered behind it, each offset sideways by a fraction of its own (shared) width */
-.wheel-rail { position: relative; overflow: hidden; display: flex; justify-content: center; container-type: inline-size; }
+/* every card is absolutely placed, so a change of front card is only a change of transform; the rail's
+   height follows the front card's (set from script) and eases, so the page below never jumps */
+.wheel-rail { position: relative; overflow: hidden; container-type: inline-size; transition: height .6s cubic-bezier(.45, 0, .2, 1); }
 /* --w is the card width: the whole stack less a side room for the back cards to peek into (14px on a phone,
    growing to 240px a side on a wide window); no fixed cap, the card grows with the browser.
    the side room left over, (100cqw - --w) / 2, is shared out between the back
    cards so each layer peeks past the one in front of it: [1 [2 [3] 4] 5] */
-.wheel-card { --w: calc(100cqw - 2 * clamp(14px, 20cqw - 60px, 240px)); position: absolute; top: 0; left: 0; right: 0; margin-inline: auto; width: var(--w); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); text-align: center; padding: 22px 64px; display: grid; gap: 10px; translate: var(--drag, 0px) 0; box-shadow: 0 8px 26px -18px rgba(0, 0, 0, .4); transition: transform .35s cubic-bezier(.22, .8, .28, 1), opacity .35s, border-color .2s; }
+.wheel-card { --w: calc(100cqw - 2 * clamp(14px, 20cqw - 60px, 240px)); --dir: 0; --s: 1; --peek: 0; --veil: 0; position: absolute; top: 0; left: 0; right: 0; margin-inline: auto; width: var(--w); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); text-align: center; padding: 22px 64px; display: grid; gap: 10px; box-shadow: 0 8px 26px -18px rgba(0, 0, 0, .4); translate: var(--drag, 0px) 0; transform: translateX(calc(var(--dir) * (var(--w) * (1 - var(--s)) / 2 + var(--peek) * (100cqw - var(--w)) / 2))) scale(var(--s)); transition: transform .6s cubic-bezier(.45, 0, .2, 1), opacity .6s ease, border-color .3s; }
 /* while the pointer drags the stack every card follows it; on release they ease back */
-.wheel-rail.settle .wheel-card { transition: translate .25s ease-out, transform .35s cubic-bezier(.22, .8, .28, 1), opacity .35s, border-color .2s; }
-.wheel-card.entering { opacity: 0; }
+.wheel-rail.settle .wheel-card { transition: translate .6s cubic-bezier(.45, 0, .2, 1), transform .6s cubic-bezier(.45, 0, .2, 1), opacity .6s ease, border-color .3s; }
+.wheel-card.entering, .wheel-card.leaving { opacity: 0; }
+.wheel-card.leaving { pointer-events: none; }
 /* both side edges carry the phase number, circled, with the number spelled out below it in upright
    stacked letters, so a card peeking out from either side of the stack still says which phase it is */
 .wheel-card .edge { position: absolute; top: 18px; width: 30px; display: grid; justify-items: center; gap: 10px; color: var(--muted); pointer-events: none; }
@@ -117,11 +120,11 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .wheel-card.done .edge { color: var(--ok); }
 .wheel-card.active .edge { color: var(--accent); }
 .wheel-card.active .edge .num { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.wheel-card.front { position: relative; z-index: 20; }
-.wheel-card.back { cursor: pointer; font: inherit; color: inherit; transform: translateX(calc(var(--dir) * (var(--w) * (1 - var(--s)) / 2 + var(--peek) * (100cqw - var(--w)) / 2))) scale(var(--s)); }
-/* back cards stay opaque (so the card in front hides what's behind it) and are dimmed by a veil */
-.wheel-card.back::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; background: var(--bg); opacity: var(--veil); pointer-events: none; transition: opacity .2s; }
-.wheel-card.back:hover::after { opacity: calc(var(--veil) / 2); }
+.wheel-card.back { cursor: pointer; }
+/* every card is opaque (so the card in front hides what's behind it); the ones behind are dimmed by a
+   veil that fades in and out as a card moves back or comes to the front */
+.wheel-card::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; background: var(--bg); opacity: var(--veil); pointer-events: none; transition: opacity .6s ease; }
+.wheel-card.back:hover::after { opacity: calc(var(--veil) / 2); transition-duration: .2s; }
 .wheel-card.back:hover { border-color: var(--accent); }
 .wheel-card.active { border-color: var(--accent); }
 /* the card's "Phase 2 · B2 · status" line: the card's identity, so it reads before the goal; the status in its colour */
@@ -140,9 +143,14 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .phase-stats .v { font: 500 18px/1 var(--mono); font-variant-numeric: tabular-nums; }
 .spend-toggle { justify-self: start; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 5px 10px; font: 600 12px/1 var(--body); color: var(--ink); }
 .spend-toggle:hover { border-color: var(--accent); }
+.spend-toggle .chev { display: inline-block; transition: transform .5s cubic-bezier(.45, 0, .2, 1); }
+.spend-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
 /* the card's side padding is room for the numbered edges; the spend button and table use the full width */
 .wheel-card .spend-toggle, .wheel-card .spend-detail { margin-inline: -42px; }
-.spend-detail { display: grid; gap: 6px; }
+/* the table opens by growing from nothing to its full height (grid rows 0fr -> 1fr) and fading in */
+.spend-detail { display: grid; grid-template-rows: 0fr; opacity: 0; margin-top: -10px; transition: grid-template-rows .55s cubic-bezier(.45, 0, .2, 1), opacity .45s ease, margin-top .55s cubic-bezier(.45, 0, .2, 1); }
+.spend-detail.open { grid-template-rows: 1fr; opacity: 1; margin-top: 0; }
+.spend-detail > .spend-in { min-height: 0; overflow: hidden; }
 .wheel-card.back .spend-toggle, .wheel-card.back .spend-detail { visibility: hidden; } /* only the front card's is live */
 .scorecard { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 8px; }
 .scorecard h3 { font-size: 14px; }
@@ -158,7 +166,7 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 /* the current phase's cell pulses: a ring of the accent swells out from it and fades */
 .pm-cell.active::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 0 var(--accent); animation: pm-pulse 1.8s ease-out infinite; pointer-events: none; }
 @keyframes pm-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--accent) 0%, transparent); } }
-.phasemap-window { position: absolute; top: -4px; bottom: -4px; border: 2px solid var(--accent); border-radius: 6px; pointer-events: none; transition: left .35s cubic-bezier(.22, .8, .28, 1), width .35s; }
+.phasemap-window { position: absolute; top: -4px; bottom: -4px; border: 2px solid var(--accent); border-radius: 6px; pointer-events: none; transition: left .6s cubic-bezier(.45, 0, .2, 1), width .6s cubic-bezier(.45, 0, .2, 1); }
 .dragging .phasemap-window { transition: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
 
 /* crew lanes */
@@ -513,12 +521,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   // ---------------------------------------------------------------- phase wheel + map
   function isNarrow() { return window.matchMedia("(max-width: 720px)").matches; }
 
-  // an overlapping card stack: every visible phase renders the SAME full-detail card; the focused
-  // one is in-flow (front, sets the stack's height) and centred, each neighbour is an absolutely-
-  // positioned "back" card pushed sideways into the room beside the front card (pure CSS from the
-  // --dir/--s/--peek vars, no measurement), scaled down, veiled a little more further out, and layered
-  // behind the one closer to the centre. Back cards are non-front but still clickable/focusable as a
-  // whole to bring them to the front; their own inner Spend button is inert until then.
+  // the phase number spelled out, for the card edges
   const ONES = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",
     "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
   const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
@@ -527,75 +530,111 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   // short words spread out, long ones close up (and, past nine letters, shrink) to stay clear of the Spend button
   const letterStyle = (n) => n <= 9 ? `--gap:${n <= 3 ? 24 : n <= 4 ? 18 : n <= 5 ? 12 : n <= 7 ? 6 : 2}px` : "--gap:-1px;--fs:11px";
 
+  // where a card sits in the stack for a given offset from the front: sideways push, scale and veil
+  function slotStyle(off, side) {
+    const a = Math.abs(off);
+    if (!a) return `z-index:20;--dir:0;--s:1;--peek:0;--veil:0;`;
+    const peeks = side === 1 ? [0, 0.9, 1.3] : [0, 0.5, 0.92, 1.3];  // the last entry is just outside the stack
+    const peek = peeks[Math.min(a, peeks.length - 1)];
+    return `z-index:${20 - a};--dir:${Math.sign(off)};--s:${Math.max(0.7, 1 - 0.06 * a)};--peek:${peek};--veil:${Math.min(0.75, 0.3 * a)};`;
+  }
+
+  // one card's fixed skeleton; renderWheel only patches the parts whose content changed, so a card is
+  // never rebuilt under a running animation (the table opening, a slide) by the once-a-second redraw
+  function cardSkeleton(el, i) {
+    const word = numberWord(i);
+    const edge = (side) => `<span class="edge ${side}" aria-hidden="true"><span class="num">${i}</span><span class="word" style="${letterStyle(word.length)}">${[...word].map((c) => `<span>${c}</span>`).join("")}</span></span>`;
+    el.innerHTML = `${edge("l")}${edge("r")}<div class="pc-head" style="display:grid;gap:10px"></div><div class="phase-stats"></div>
+      <button class="spend-toggle">Spend details <span class="chev" aria-hidden="true">▸</span></button>
+      <div class="spend-detail"><div class="spend-in"><div class="tbl-wrap"><table></table></div></div></div><div class="pc-bake"></div>`;
+    el._parts = { head: el.querySelector(".pc-head"), stats: el.querySelector(".phase-stats"), toggle: el.querySelector(".spend-toggle"),
+      detail: el.querySelector(".spend-detail"), table: el.querySelector("table"), bake: el.querySelector(".pc-bake") };
+    el._html = {};
+  }
+  function patch(el, key, html) {
+    if (el._html[key] !== html) { el._parts[key].innerHTML = html; el._html[key] = html; }
+  }
+
+  // an overlapping card stack: every visible phase renders the SAME full-detail card; the focused one
+  // is in front, centred, and sets the rail's height; each neighbour is pushed sideways into the room
+  // beside it (pure CSS from the --dir/--s/--peek vars), scaled down, veiled a little more further out,
+  // and layered behind the one closer to the centre. All of it is transform/opacity, so a change of
+  // focus slides the same card elements into their new places; cards joining the stack slide in from
+  // outside it and cards leaving slide out and fade before they are removed.
   function renderWheel(s, phases, view, curId, T) {
     const rail = $("wheelRail");
-    if (!phases.length) { rail.innerHTML = ""; return; }
+    if (!phases.length) { rail.innerHTML = ""; rail.style.height = "0"; return; }
     const side = isNarrow() ? 1 : 2;
     const focusedIdx = Math.max(0, phases.findIndex((p) => p.id === view));
     const start = Math.max(0, focusedIdx - side), end = Math.min(phases.length - 1, focusedIdx + side);
     const tasksAll = [...s.tasks.values()];
-    // keep each phase's card element between renders, so a change of focus moves the same card and its
-    // transform/veil animate; only cards entering the stack are created (and fade in)
     const stale = new Map([...rail.children].map((el) => [el.dataset.id, el]));
     const firstPaint = !rail.children.length;
+    let front = null;
     for (let i = start; i <= end; i++) {
       const p = phases[i]; const off = i - focusedIdx; const isFront = off === 0;
       const ps = s.phases[p.id]; const done = ps?.status === "done"; const isCur = p.id === curId && !!ps;
       const cls = done ? "done" : isCur ? "active" : "future";
       const label = done ? "✓ Complete" : isCur ? "In progress" : "Up next";
-      const cost = phaseCost(s, p.id);
       const spendP = Object.values(s.spend[p.id] || {});
       const pStart = ps?.t;
       const elapsed = pStart ? ((done ? ps.end : T) - pStart) / 1000 : 0;
-      const runs = sum(spendP, "runs"), reruns = sum(spendP, "reruns"), failed = sum(spendP, "failed");
-      const absOff = Math.abs(off);
-      const z = 20 - absOff;
-      let style = `z-index:${z};`;
-      if (!isFront) {
-        const scale = Math.max(0.7, 1 - 0.06 * absOff);
-        const veil = Math.min(0.6, 0.3 * absOff);
-        // share of the side room this card's outer edge reaches; the outermost card nearly fills it
-        const peek = side === 1 ? 0.9 : [0, 0.5, 0.92][absOff];
-        style += `--dir:${Math.sign(off)};--s:${scale};--peek:${peek};--veil:${veil};`;
-      }
-      const toggleAttrs = isFront ? `id="spendToggle" aria-expanded="${st.spendExpanded}"` : `inert tabindex="-1" aria-hidden="true"`;
-      const edge = (side) => `<span class="edge ${side}" aria-hidden="true"><span class="num">${i}</span><span class="word" style="${letterStyle(numberWord(i).length)}">${[...numberWord(i)].map((c) => `<span>${c}</span>`).join("")}</span></span>`;
-      const inner = `${edge("l")}${edge("r")}<span class="phase-tag">Phase ${i} · ${esc(p.id.toUpperCase())} · <b class="${cls}">${label}</b></span>
-        <h2>${esc(p.title)}<span>.</span></h2>
-        <p>${esc(p.goal)}</p>
-        <p class="exit"><b>Done when:</b> ${esc(p.exit)}</p>
-        <div class="phase-stats">
-          <div><span class="eyebrow">Elapsed</span><span class="v">${pStart ? fmtS(elapsed) : "–"}</span></div>
-          <div><span class="eyebrow">Runs</span><span class="v">${runs}</span></div>
-          <div><span class="eyebrow">Reruns</span><span class="v">${reruns}</span></div>
-          <div><span class="eyebrow">Failed</span><span class="v">${failed}</span></div>
-          <div><span class="eyebrow">Spend</span><span class="v">${fmtC(cost)}</span></div>
-        </div>
-        <button class="spend-toggle" ${toggleAttrs}>Spend details ${st.spendExpanded ? "▾" : "▸"}</button>
-        <div class="spend-detail" ${st.spendExpanded ? "" : "hidden"}>
-          <div class="tbl-wrap"><table>${phaseSpendTableHtml(s, p.id)}</table></div>
-        </div>
-        ${bakeoffHtml(tasksAll, p.id)}`;
       let el = stale.get(p.id);
       stale.delete(p.id);
       const entering = !el;
-      if (entering) { el = document.createElement("div"); el.dataset.id = p.id; }
-      el.className = `wheel-card ${cls} ${isFront ? "front" : "back"}${entering && !firstPaint ? " entering" : ""}`;
+      if (entering) { el = document.createElement("div"); el.dataset.id = p.id; cardSkeleton(el, i); }
+      clearTimeout(el._leaveTimer);
+      // only a card joining at the outer edge fades in; one landing nearer the front (after a jump of several
+      // phases) slides in opaque, or the cards behind it would show through it on the way
+      const fadeIn = entering && !firstPaint && Math.abs(off) === side;
+      el.className = `wheel-card ${cls} ${isFront ? "front" : "back"}${fadeIn ? " entering" : ""}`;
       el.dataset.offset = off;
-      el.style.cssText = style;
-      if (isFront) { el.removeAttribute("role"); el.removeAttribute("tabindex"); el.removeAttribute("aria-label"); }
+      patch(el, "head", `<span class="phase-tag">Phase ${i} · ${esc(p.id.toUpperCase())} · <b class="${cls}">${label}</b></span>
+        <h2>${esc(p.title)}<span>.</span></h2><p>${esc(p.goal)}</p><p class="exit"><b>Done when:</b> ${esc(p.exit)}</p>`);
+      patch(el, "stats", `<div><span class="eyebrow">Elapsed</span><span class="v">${pStart ? fmtS(elapsed) : "–"}</span></div>
+        <div><span class="eyebrow">Runs</span><span class="v">${sum(spendP, "runs")}</span></div>
+        <div><span class="eyebrow">Reruns</span><span class="v">${sum(spendP, "reruns")}</span></div>
+        <div><span class="eyebrow">Failed</span><span class="v">${sum(spendP, "failed")}</span></div>
+        <div><span class="eyebrow">Spend</span><span class="v">${fmtC(phaseCost(s, p.id))}</span></div>`);
+      patch(el, "table", phaseSpendTableHtml(s, p.id));
+      patch(el, "bake", bakeoffHtml(tasksAll, p.id));
+      const open = isFront && st.spendExpanded, tg = el._parts.toggle;
+      el._parts.detail.classList.toggle("open", open);
+      tg.setAttribute("aria-expanded", open);
+      if (isFront) { tg.id = "spendToggle"; tg.removeAttribute("inert"); tg.removeAttribute("tabindex"); tg.removeAttribute("aria-hidden"); }
+      else { tg.removeAttribute("id"); tg.inert = true; tg.tabIndex = -1; tg.setAttribute("aria-hidden", "true"); }
+      if (isFront) { front = el; el.removeAttribute("role"); el.removeAttribute("tabindex"); el.removeAttribute("aria-label"); }
       else {
         el.setAttribute("role", "button"); el.tabIndex = 0;
         el.setAttribute("aria-label", `Phase ${i}, ${p.id.toUpperCase()}: ${p.title} — ${label}. Bring to front.`);
       }
-      if (el._inner !== inner) { el.innerHTML = inner; el._inner = inner; }
       if (entering) {
+        // start one slot further out than its place (just outside the stack), then slide in
+        el.style.cssText = firstPaint ? slotStyle(off, side) : slotStyle(off + (off < 0 ? -1 : 1), side);
         rail.appendChild(el); // never re-append a kept card: moving a node restarts its transitions
-        if (!firstPaint) requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("entering")));
-      }
+        if (!firstPaint) {
+          const target = slotStyle(off, side);
+          el.style.zIndex = 20 - Math.abs(off); // in front of the cards it slides over from the start
+          requestAnimationFrame(() => requestAnimationFrame(() => { el.classList.remove("entering"); el.style.cssText = target; }));
+        }
+      } else el.style.cssText = slotStyle(off, side);
     }
-    stale.forEach((el) => el.remove());
+    // cards leaving the stack slide out past its edge and fade, then go
+    stale.forEach((el) => {
+      if (el.classList.contains("leaving")) return;
+      const idx = phases.findIndex((p) => p.id === el.dataset.id);
+      el.classList.add("leaving"); el.classList.remove("front"); el.classList.add("back");
+      el.style.cssText = slotStyle(idx < focusedIdx ? -(side + 1) : side + 1, side);
+      el._leaveTimer = setTimeout(() => el.remove(), 650);
+    });
+    // the rail takes the front card's height, and keeps following it while its table opens or closes
+    if (front && railObserved !== front) {
+      railObserver.disconnect(); railObserver.observe(front); railObserved = front;
+    }
+    if (front) rail.style.height = `${front.offsetHeight}px`;
   }
+  let railObserved = null;
+  const railObserver = new ResizeObserver(() => { if (railObserved?.isConnected) $("wheelRail").style.height = `${railObserved.offsetHeight}px`; });
 
   const drag = { on: false, armed: false, justDragged: false };
   function renderPhasemap(s, phases, view, curId) {
@@ -878,39 +917,46 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     shiftPhase(dx > 0 ? 1 : -1);
     setTimeout(() => { wheelLock = false; }, 450);
   }, { passive: false });
-  // drag the stack with a mouse, pen or finger: the cards follow the pointer, and each time it has
-  // travelled one step the next phase comes to the front (drag left for later phases); at either end
-  // of the phases the cards only give a little. On release they ease back into place.
+  // drag the stack with a mouse, pen or finger: the cards follow the pointer, and on release the stack
+  // moves one phase per stretch of the drag (drag left for later phases) while the cards ease into their
+  // new places, so nothing snaps mid-drag. At either end of the phases the cards only give a little.
   const cardDrag = { armed: false, on: false, justDragged: false };
   const trackEl = $("wheelTrack"), railEl = $("wheelRail");
   trackEl.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || e.target.closest("button, a, input, .tbl-wrap")) return;
-    Object.assign(cardDrag, { armed: true, on: false, x0: e.clientX, id: e.pointerId,
-      stepPx: Math.max(60, Math.min(200, railEl.clientWidth * 0.15)) });
+    const ids = (st.meta?.phases || []).map((p) => p.id);
+    Object.assign(cardDrag, { armed: true, on: false, x0: e.clientX, id: e.pointerId, ids,
+      idx0: Math.max(0, ids.indexOf(st.viewPhase || fold(nowT()).cur)),
+      stepPx: Math.max(60, Math.min(180, railEl.clientWidth * 0.12)) });
   });
+  const dragSteps = (dx) => {
+    const want = -Math.round(dx / cardDrag.stepPx);
+    return Math.min(cardDrag.ids.length - 1, Math.max(0, cardDrag.idx0 + want)) - cardDrag.idx0;
+  };
   trackEl.addEventListener("pointermove", (e) => {
     if (!cardDrag.armed || e.pointerId !== cardDrag.id) return;
-    let dx = e.clientX - cardDrag.x0;
+    const dx = e.clientX - cardDrag.x0;
     if (!cardDrag.on) {
       if (Math.abs(dx) < 6) return;
       cardDrag.on = true; trackEl.classList.add("dragging"); railEl.classList.remove("settle");
       trackEl.setPointerCapture(e.pointerId);
     }
-    const ids = (st.meta?.phases || []).map((p) => p.id);
-    const idx = ids.indexOf(st.viewPhase || fold(nowT()).cur);
-    const d = dx < 0 ? 1 : -1;
-    if (Math.abs(dx) >= cardDrag.stepPx && idx + d >= 0 && idx + d < ids.length) {
-      shiftPhase(d); cardDrag.x0 -= d * cardDrag.stepPx; dx += d * cardDrag.stepPx;
-    }
-    const atEnd = idx + d < 0 || idx + d >= ids.length;
-    railEl.style.setProperty("--drag", `${(atEnd ? dx * 0.25 : dx * 0.6).toFixed(1)}px`);
+    // past the first or last phase the pull is damped, so the end of the stack is felt
+    const room = dx < 0 ? cardDrag.ids.length - 1 - cardDrag.idx0 : cardDrag.idx0;
+    const free = room * cardDrag.stepPx, over = Math.max(0, Math.abs(dx) - free);
+    const shown = Math.sign(dx) * (Math.min(Math.abs(dx), free) * 0.5 + over * 0.15);
+    railEl.style.setProperty("--drag", `${shown.toFixed(1)}px`);
   });
   const endCardDrag = (e) => {
     if (!cardDrag.armed || e.pointerId !== cardDrag.id) return;
     const was = cardDrag.on;
     cardDrag.armed = false; cardDrag.on = false; trackEl.classList.remove("dragging");
     railEl.classList.add("settle"); railEl.style.setProperty("--drag", "0px");
-    if (was) { cardDrag.justDragged = true; setTimeout(() => { cardDrag.justDragged = false; }, 0); }
+    if (was) {
+      const d = dragSteps(e.clientX - cardDrag.x0);
+      if (d) shiftPhase(d);
+      cardDrag.justDragged = true; setTimeout(() => { cardDrag.justDragged = false; }, 0);
+    }
   };
   trackEl.addEventListener("pointerup", endCardDrag);
   trackEl.addEventListener("pointercancel", endCardDrag);

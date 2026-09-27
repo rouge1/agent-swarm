@@ -12,7 +12,10 @@
   circle with the number spelled out below it, one letter per line, spaced out wide for a short word and
   closing up for a long one (filled for the current phase, green when
   done), so a card peeking from either side still says which phase it is (hidden on narrow screens, where
-  nothing peeks). Only the front card shows its Spend details. Navigate with the large ‹ › buttons (hidden on
+  nothing peeks). Only the front card shows its Spend details. Nothing snaps: cards slide
+  into their new places over about 0.6 s (joining cards slide in from outside the stack, leaving ones slide
+  out and fade), the Spend details table grows open and fades in, and the stack's height, and so the page
+  below it, eases to the front card's height. Navigate with the large ‹ › buttons (hidden on
   narrow screens), `[`/`]` keys, trackpad/shift-wheel scroll, by dragging the cards left or right (mouse,
   pen or finger; they follow the pointer and step one phase per stretch of the drag), or by clicking (or
   Enter/Space on) a peeking card. The current phase's cell in the phase map pulses, so it is easy to find again (L or
