@@ -10,7 +10,8 @@
   screens), each one opaque, a little smaller and more veiled than the one in front of it, and pushed out just
   far enough to peek past it. Only the front card's Spend button is live. Navigate with the ‹ › buttons (hidden
   on narrow screens), `[`/`]` keys, trackpad/shift-wheel scroll, touch swipe, or by clicking (or Enter/Space on)
-  a peeking card; a "Back to current phase" control appears once you've moved away. The bake-off scorecard
+  a peeking card. The current phase's cell in the phase map pulses, so it is easy to find again (L or
+  End goes back to live). The bake-off scorecard
   appears inside a phase card only while that phase has scored tasks that aren't all merged/dropped yet -- once
   settled it disappears.
 - **phase map**: every phase as a tiny numbered cell, coloured by status, with a window box outlining exactly the
@@ -24,7 +25,7 @@
 - the activity feed
 - a replay player: Space plays or pauses, 1/2/3 set the speed, ←/→ step, Home/End jump, `[`/`]` shift the wheel's
   focused phase, R restarts. During replay the focused phase follows the replayed current phase unless you've
-  wheeled away (same "Back to current phase" rule as live mode).
+  moved away (L or End brings the focus back to the current phase).
 
 Claude lanes (their spend comes from the `claude` transcript tally, not worker `run` events) are any
 `meta.models` entry with `driver: "claude"` -- there's no hard-coded model key or price-key map. The orchestrator

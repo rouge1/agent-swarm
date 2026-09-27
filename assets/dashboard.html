@@ -118,7 +118,6 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .phase-stats { display: flex; flex-wrap: wrap; gap: 18px; row-gap: 8px; }
 .phase-stats div { display: grid; gap: 2px; text-align: right; }
 .phase-stats .v { font: 500 18px/1 var(--mono); font-variant-numeric: tabular-nums; }
-.back-to-current { justify-self: center; border: 1px dashed var(--line); background: var(--panel); border-radius: 999px; padding: 6px 14px; font: 600 12px/1 var(--body); color: var(--accent); }
 .spend-toggle { justify-self: start; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 5px 10px; font: 600 12px/1 var(--body); color: var(--ink); }
 .spend-toggle:hover { border-color: var(--accent); }
 .spend-detail { display: grid; gap: 6px; }
@@ -131,7 +130,10 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .phasemap { display: grid; gap: 4px; justify-content: center; }
 .pm-cell { border: 1px solid var(--line); background: var(--panel); border-radius: 4px; height: 22px; width: 26px; display: flex; align-items: center; justify-content: center; font: 600 10px/1 var(--mono); color: var(--muted); }
 .pm-cell.done { background: var(--panel-2); color: var(--ok); }
-.pm-cell.active { color: var(--accent); font-weight: 700; border-color: var(--accent); }
+.pm-cell.active { position: relative; color: var(--accent); font-weight: 700; border-color: var(--accent); }
+/* the current phase's cell pulses: a ring of the accent swells out from it and fades */
+.pm-cell.active::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 0 var(--accent); animation: pm-pulse 1.8s ease-out infinite; pointer-events: none; }
+@keyframes pm-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--accent) 0%, transparent); } }
 .pm-cell.pm-focus { outline: 2px solid var(--ink); outline-offset: 2px; }
 .phasemap-window { position: absolute; top: -4px; bottom: -4px; border: 2px solid var(--accent); border-radius: 6px; pointer-events: none; transition: left .35s cubic-bezier(.22, .8, .28, 1), width .35s; }
 .dragging .phasemap-window { transition: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
@@ -237,7 +239,6 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
       <div class="wheel-track" id="wheelTrack"><div class="wheel-rail" id="wheelRail"></div></div>
       <button class="wheel-nav" id="wheelNext" aria-label="Next phase" title="Next phase (])">›</button>
     </div>
-    <button class="back-to-current" id="backCurrent" hidden>⟲ Back to current phase</button>
   </section>
 
   <div class="phasemap-wrap" id="phasemapWrap" title="Drag the window, or click a phase">
@@ -495,7 +496,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   // whole to bring them to the front; their own inner Spend button is inert until then.
   function renderWheel(s, phases, view, curId, T) {
     const rail = $("wheelRail");
-    if (!phases.length) { rail.innerHTML = ""; $("backCurrent").hidden = true; return; }
+    if (!phases.length) { rail.innerHTML = ""; return; }
     const side = isNarrow() ? 1 : 2;
     const focusedIdx = Math.max(0, phases.findIndex((p) => p.id === view));
     const start = Math.max(0, focusedIdx - side), end = Math.min(phases.length - 1, focusedIdx + side);
@@ -560,7 +561,6 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
       }
     }
     stale.forEach((el) => el.remove());
-    $("backCurrent").hidden = view === curId;
   }
 
   const drag = { on: false, armed: false, justDragged: false };
@@ -777,7 +777,6 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   $("scrub").oninput = (e) => { const val = e.target.value; if (st.mode === "live") st.mode = "replay"; pause(); st.v = val / 1000 * vTotal(); st.viewPhase = null; render(); };
   $("wheelPrev").onclick = () => shiftPhase(-1);
   $("wheelNext").onclick = () => shiftPhase(1);
-  $("backCurrent").onclick = () => { st.viewPhase = null; render(); };
   $("wheelTrack").addEventListener("click", (e) => {
     if (e.target.closest("#spendToggle")) { toggleSpend(); return; }
     const back = e.target.closest(".wheel-card.back");
