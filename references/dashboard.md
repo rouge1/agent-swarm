@@ -65,7 +65,10 @@ claude.ai `db` capability, or -- for a standalone deployment with no database --
 `watch` does one pass every 30 seconds (`--every N`): the activity scan, the Claude transcript tally (skipped when
 `claude.session_dir` doesn't exist, or with `--no-claude`), then the board folder, `<ops>/out/site/` by default
 (`--out DIR`). `--serve PORT` also serves that folder from the same process, bound to 127.0.0.1 (`--bind` to
-change it; keep it on this machine unless the user asks otherwise). `--once` does a single pass and exits;
+change it; keep it on this machine unless the user asks otherwise). Each pass re-reads `swarm.toml` if it changed, so new phases, models and roles reach the board
+without a restart (an edit that doesn't parse yet keeps the last good config). A phase the events use but
+the config doesn't list still gets a card at the end of the stack, titled by its id. `--once` does a single
+pass and exits;
 `swarm.py site` writes the folder without the tally.
 
 The folder holds three files:

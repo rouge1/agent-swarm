@@ -120,6 +120,25 @@ class SiteTest(BoardTestBase):
         self.assertIn("activity", [e["type"] for e in shipped])
 
 
+class WatchReloadTest(BoardTestBase):
+    def test_reload_picks_up_new_phases_and_survives_a_bad_edit(self):
+        cfg = swarm.CONFIG_PATH
+        seen = cfg.stat().st_mtime
+        cfg.write_text(cfg.read_text() + '\n[[phases]]\nid = "p2"\ntitle = "Two"\ngoal = "g"\nexit = "e"\n')
+        os.utime(cfg, (seen + 5, seen + 5))
+        with contextlib.redirect_stdout(io.StringIO()):
+            seen = swarm.reload_if_changed(seen)
+        self.assertEqual([p["id"] for p in swarm.PHASES], ["p1", "p2"])
+        cfg.write_text(cfg.read_text() + "\n[[phases]\n")  # half-typed edit
+        os.utime(cfg, (seen + 5, seen + 5))
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            swarm.reload_if_changed(seen)
+        self.assertIn("keeping the last good one", err.getvalue())
+        self.assertEqual([p["id"] for p in swarm.PHASES], ["p1", "p2"])
+        run_cli("site")
+        self.assertEqual(len(json.loads((swarm.OUT / "site" / "meta.json").read_text())["phases"]), 2)
+
+
 class ParseTest(BoardTestBase):
     def test_grok_actions(self):
         root = str(self.wt / "p1-a-grokw")

@@ -37,6 +37,7 @@ SKILL_DIR = SCRIPT_DIR.parent                  # .../opencode-swarm -- assets/, 
 # Populated by load_config() before any command but `init` runs; predeclared
 # here (with harmless defaults) so `init` and `--help` work without a config.
 CFG: dict = {}
+CONFIG_PATH: Path | None = None
 OPS = DATA = OUT = LOGS = EVENTS = LEDGER = None
 MODELS: dict = {}
 PHASES: list = []
@@ -114,11 +115,12 @@ def find_config(explicit: str | None) -> Path:
 
 
 def load_config(path: Path) -> None:
-    global CFG, OPS, DATA, OUT, LOGS, EVENTS, LEDGER, MODELS, PHASES, WATCHDOG
+    global CFG, CONFIG_PATH, OPS, DATA, OUT, LOGS, EVENTS, LEDGER, MODELS, PHASES, WATCHDOG
     global OPENCODE_BIN, OPENCODE_AGENT, SESSION_DIR, CLAUDE_SESSION, CLAUDE_PRICES, CLAUDE_NAMES, DASHBOARD_URL
     global GROK_BIN, GROK_MAX_TURNS, GROK_REASONING_EFFORT, GROK_SANDBOX, GROK_ALLOW_UNSANDBOXED
 
     CFG = tomllib.loads(path.read_text())
+    CONFIG_PATH = path
     OPS = path.parent
     DATA, OUT = OPS / "data", OPS / "out"
     LOGS, EVENTS, LEDGER = DATA / "logs", DATA / "events.jsonl", DATA / "ledger.jsonl"
@@ -1097,6 +1099,19 @@ def watch_pass(site: Path, tally: bool) -> None:
     write_site(site)
 
 
+def reload_if_changed(seen: float) -> float:
+    """Pick up swarm.toml edits (new phases, models, roles) without restarting `watch`; a file that doesn't
+    parse mid-edit keeps the last good config until it does. Returns the mtime now seen."""
+    mtime = CONFIG_PATH.stat().st_mtime
+    if mtime != seen:
+        try:
+            load_config(CONFIG_PATH)
+            print("watch: swarm.toml changed, reloaded", flush=True)
+        except (tomllib.TOMLDecodeError, KeyError) as exc:
+            print(f"watch: swarm.toml doesn't load yet, keeping the last good one ({exc})", file=sys.stderr, flush=True)
+    return mtime
+
+
 def cmd_watch(a):
     """Keep the standalone board current: one pass every --every seconds, optionally serving it."""
     site = _site_dir(a)
@@ -1107,8 +1122,10 @@ def cmd_watch(a):
     site.mkdir(parents=True, exist_ok=True)
     if a.serve is not None:
         _serve(site, a.serve, a.bind)
+    seen = CONFIG_PATH.stat().st_mtime
     while True:
         try:
+            seen = reload_if_changed(seen)
             watch_pass(site, not a.no_claude)
         except Exception as exc:  # keep watching; one bad pass must not stop the board
             print(f"watch: {exc}", file=sys.stderr, flush=True)

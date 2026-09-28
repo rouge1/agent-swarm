@@ -993,6 +993,13 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   function setData(meta, events) {
     const atEnd = st.mode === "live" || st.v >= vTotal() - 1e-6;
     st.meta = meta || st.meta; st.events = events.slice().sort((a, b) => a.t - b.t);
+    // a phase the events use but the config doesn't list (added after the board was written) still gets
+    // a card, at the end, titled by its id, so its activity has somewhere to show
+    if (st.meta) {
+      const known = new Set((st.meta.phases || []).map((p) => p.id)), extra = [];
+      for (const e of st.events) if (e.phase && !known.has(e.phase)) { known.add(e.phase); extra.push({ id: e.phase, title: e.phase.toUpperCase(), goal: "Not in swarm.toml's phases yet.", exit: "–" }); }
+      if (extra.length) st.meta = { ...st.meta, phases: [...(st.meta.phases || []), ...extra] };
+    }
     rebuildColors();
     buildVirtual(); renderMarks();
     if (st.mode === "replay" && atEnd && !st.playing) st.v = vTotal();
