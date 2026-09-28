@@ -239,8 +239,10 @@ tr.win td:first-child::after { content: "WINNER"; margin-left: 8px; font: 700 9.
 .track { position: relative; display: grid; gap: 4px; }
 .track input { width: 100%; accent-color: var(--accent); margin: 0; }
 .marks { position: relative; height: 12px; font: 600 9.5px/1 var(--mono); color: var(--muted); }
-.marks span { position: absolute; transform: translateX(-50%); top: 0; }
+.marks span { position: absolute; transform: translateX(-50%); top: 0; white-space: nowrap; }
 .marks span::before { content: ""; position: absolute; left: 50%; top: -9px; width: 1px; height: 7px; background: var(--muted); }
+/* a phase start too close to the next one keeps its tick; its label shows on hover (title) */
+.marks span.tick { color: transparent; }
 .ptime { font-size: 12px; color: var(--muted); text-align: right; min-width: 120px; }
 .keys { font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: center; padding-top: 6px; }
 kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--panel-2); color: var(--ink); }
@@ -829,15 +831,23 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     $("ptime").textContent = !first ? "" : st.mode === "live" ? `${st.events.length} events · ${fmtS((Date.now() - first) / 1000)} total` : `${fmtS((T - first) / 1000)} of ${fmtS((st.events[st.events.length - 1].t - first) / 1000)} · ${st.speed === "showcase" ? "showcase" : st.speed.slice(1) + "×"}`;
   }
 
+  // a tick and label under the replay bar where each phase first started. Labels that would run into the
+  // one to their right are left as bare ticks (hover shows the phase), working from the right so the
+  // most recent phases keep theirs
   function renderMarks() {
     const total = vTotal(); if (!total) { $("marks").innerHTML = ""; return; }
-    const seen = new Set(); let html = "";
+    const seen = new Set(), marks = [];
     st.events.forEach((e, i) => {
-      if (e.type === "phase" && e.status === "active" && !seen.has(e.phase)) {
-        seen.add(e.phase); html += `<span style="left:${(st.vt[i] / total * 100).toFixed(2)}%">${esc(e.phase.toUpperCase())}</span>`;
-      }
+      if (e.type === "phase" && e.status === "active" && !seen.has(e.phase)) { seen.add(e.phase); marks.push({ id: e.phase, x: st.vt[i] / total }); }
     });
-    $("marks").innerHTML = html;
+    const w = $("marks").clientWidth || 600, charW = 6.2, gap = 6;
+    let nextLeft = Infinity;
+    for (let k = marks.length - 1; k >= 0; k--) {
+      const m = marks[k], half = (m.id.length * charW) / 2, px = m.x * w;
+      m.fits = px + half + gap <= nextLeft;
+      if (m.fits) nextLeft = px - half;
+    }
+    $("marks").innerHTML = marks.map((m) => `<span class="${m.fits ? "" : "tick"}" style="left:${(m.x * 100).toFixed(2)}%" title="${esc(m.id.toUpperCase())}: ${esc(phaseTitle(m.id))}">${esc(m.id.toUpperCase())}</span>`).join("");
   }
 
   // ---------------------------------------------------------------- control
@@ -987,7 +997,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   trackEl.addEventListener("pointerup", endCardDrag);
   trackEl.addEventListener("pointercancel", endCardDrag);
   let resizeTimer = 0;
-  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { renderMarks(); render(); }, 150); });
   document.addEventListener("keydown", (e) => {
     if (e.target.matches?.("input, textarea") && e.key !== " ") return;
     // Space/Enter on a focused control presses that control, not the global play/pause shortcut
