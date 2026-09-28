@@ -47,6 +47,9 @@ when it changes (a Claude subagent holding for its own background job, such as a
 is not counted as finished); the scribe adds the summary with `swarm.py activity`. Activity never appears in the feed,
 and both lines clear when the task changes status.
 
+Until a Claude subagent's runs are logged with `swarm.py log-run`, its lane and spend rows show its tokens
+and cost from the transcripts with "not logged" in place of the run counts, rather than a misleading 0.
+
 Claude lanes (their spend comes from the `claude` transcript tally, not worker `run` events) are any
 `meta.models` entry with `driver: "claude"` -- there's no hard-coded model key or price-key map. The orchestrator
 lane's role line comes from an optional `[project] orchestrator` string in `swarm.toml` (falls back to a generic
