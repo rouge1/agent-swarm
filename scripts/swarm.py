@@ -11,8 +11,8 @@ The live dashboard and its replay are both folds over it; `push` exports it
 as one timeline document per phase for the dashboard's database.
 
 Config lookup: --config PATH (anywhere on the command line), else
-$SWARM_CONFIG, else a file named `swarm.toml` in the current directory or any
-parent. The ops dir (data/, out/, prompts/, specs/) defaults to the directory
+$SWARM_CONFIG, else `swarm.toml` or `.swarm/swarm.toml` in the current
+directory or any parent. The ops dir (data/, out/, prompts/, specs/) defaults to the directory
 that holds the resolved config file. `swarm.py init` scaffolds a fresh one.
 """
 
@@ -108,10 +108,12 @@ def find_config(explicit: str | None) -> Path:
         return p
     here = Path.cwd()
     for cand in (here, *here.parents):
-        p = cand / "swarm.toml"
-        if p.is_file():
-            return p
-    sys.exit("no swarm.toml found: pass --config PATH, set $SWARM_CONFIG, or run `swarm.py init` here")
+        # an ops dir kept inside the repo as .swarm/ is found from anywhere in the repo, no flag needed
+        for p in (cand / "swarm.toml", cand / ".swarm" / "swarm.toml"):
+            if p.is_file():
+                return p
+    sys.exit("no swarm.toml found (here, in .swarm/, or in a parent): pass --config PATH, set $SWARM_CONFIG, "
+             "or run `swarm.py init` here")
 
 
 def load_config(path: Path) -> None:
@@ -1285,7 +1287,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="swarm",
         epilog="Config lookup: --config PATH (anywhere on the command line), else $SWARM_CONFIG, "
-               "else swarm.toml in the current directory or any parent. Run `swarm.py init` to create one.")
+               "else swarm.toml or .swarm/swarm.toml in the current directory or any parent. "
+               "Run `swarm.py init` to create one.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("init", help="scaffold a fresh ops directory")

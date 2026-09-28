@@ -192,6 +192,20 @@ applied; a silent fall-through to "no enforcement" is exactly the failure
 mode the sandbox requirement above exists to catch, so treat a sandboxed
 Grok run that reports no enforcement as a configuration bug, not a pass.
 
+## Under Claude Code: the permission rule
+
+Claude Code's auto mode blocks a command that launches `grok --always-approve`, so allow one wrapper, not
+`grok` in general. The rule is a prefix match on the command line, for example:
+
+    Bash(python3 .claude/skills/agent-swarm/scripts/swarm.py run:*)
+
+For the rule to match, the command must start exactly with that prefix:
+- Keep the ops dir where `swarm.py` finds it without a flag (`swarm.toml` or `.swarm/swarm.toml` in the
+  current directory or a parent), or put `--config PATH` *after* the subcommand:
+  `python3 .claude/skills/agent-swarm/scripts/swarm.py run p1 t1 grokw --dir ... --config .swarm/swarm.toml`.
+- Don't prefix it with `SWARM_CONFIG=...`, and don't put `--config` before `run`: neither matches the rule,
+  so every launch prompts.
+
 ## Stub for tests
 
 Never invoke the real `grok` binary from a test. Point `[grok] bin` at a

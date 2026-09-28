@@ -1,8 +1,9 @@
 # swarm.toml -- configuration for the opencode-swarm ops tool (scripts/swarm.py).
 #
 # swarm.py looks for this file at: the path given by --config, else
-# $SWARM_CONFIG, else a file named `swarm.toml` in the current directory or
-# any parent directory. Everything the tool writes (data/, out/, prompts/,
+# $SWARM_CONFIG, else `swarm.toml` or `.swarm/swarm.toml` in the current
+# directory or any parent directory (so an ops dir kept inside the repo as
+# .swarm/ needs no flag). Everything the tool writes (data/, out/, prompts/,
 # specs/) lives next to this file. Copy this file to your ops directory as
 # `swarm.toml` and edit it, or run:
 #   swarm.py init --name "My Project" --repo /path/to/repo

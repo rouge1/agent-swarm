@@ -15,6 +15,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent
@@ -137,6 +138,22 @@ class WatchReloadTest(BoardTestBase):
         self.assertEqual([p["id"] for p in swarm.PHASES], ["p1", "p2"])
         run_cli("site")
         self.assertEqual(len(json.loads((swarm.OUT / "site" / "meta.json").read_text())["phases"]), 2)
+
+
+class ConfigLookupTest(unittest.TestCase):
+    def test_finds_dot_swarm_from_inside_the_repo(self):
+        tmp = Path(tempfile.mkdtemp(prefix="swarm-lookup-test-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        cfg = tmp / "repo" / ".swarm" / "swarm.toml"
+        (tmp / "repo" / "src" / "pkg").mkdir(parents=True)
+        cfg.parent.mkdir()
+        cfg.write_text('[project]\nname = "x"\n')
+        old = os.getcwd()
+        self.addCleanup(os.chdir, old)
+        os.chdir(tmp / "repo" / "src" / "pkg")
+        env = {k: v for k, v in os.environ.items() if k != "SWARM_CONFIG"}
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(swarm.find_config(None), cfg.resolve())
 
 
 class ParseTest(BoardTestBase):
