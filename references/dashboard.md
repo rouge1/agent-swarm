@@ -42,7 +42,9 @@ summary in plain words, and underneath it the agent's latest action (`now: bash 
 it has been going once that passes two minutes). Both come from `activity` events: `swarm.py scan` (run by
 every `watch` pass) reads the run log of each `swarm.py run` still going (Grok and OpenCode workers) and the
 transcripts of Claude subagents whose description starts with `[<phase>:<task>]`, and logs the latest action
-when it changes; the scribe adds the summary with `swarm.py activity`. Activity never appears in the feed,
+when it changes (a Claude subagent holding for its own background job, such as a test suite started with
+`run_in_background` or a `Monitor` wait, shows `waiting: <job>` until the job's notification arrives, and
+is not counted as finished); the scribe adds the summary with `swarm.py activity`. Activity never appears in the feed,
 and both lines clear when the task changes status.
 
 Claude lanes (their spend comes from the `claude` transcript tally, not worker `run` events) are any

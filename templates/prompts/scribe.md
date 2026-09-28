@@ -10,7 +10,8 @@ Each pass:
    judgement.
 2. `agents --json`. It lists every agent working now: phase, task, model, runtime, status, `idle_s`, and its
    last few actions (tool calls; `said:` lines are its answer text). Runs launched by `swarm.py run` also
-   carry `alive`; Claude subagents carry `started`/`last` (ms), `ended` and `run_logged`.
+   carry `alive`; Claude subagents carry `started`/`last` (ms), `ended`, `run_logged`, and `waiting` (the
+   background job it is holding for, e.g. a test suite, or null).
 3. For each agent, write one plain sentence on what it is doing and how it is going, from its actions: what
    it is working on, and any sign of progress or trouble (tests passing or failing, the same error again).
    Log it only when it says something new since your last pass:
@@ -20,7 +21,8 @@ Each pass:
    5 tests pass"). No file names or paths, no idle times, no guessing beyond what the actions show.
 4. Flag trouble once, as a feed note: `note --who scribe "<phase>/<task> <model>: <what>"` when
    - a run launched by swarm.py is not `alive` (crashed; the phase manager runs `swarm.py recover`),
-   - an agent has been quiet (`idle_s`) for more than 10 minutes,
+   - an agent has been quiet (`idle_s`) for more than 10 minutes and isn't `waiting` on a background job
+     (a job that has run for over an hour is worth a note too),
    - an agent repeats the same failing command or edit three or more times.
    Don't repeat a note you already wrote for the same problem.
 5. A Claude subagent that has `ended` with `run_logged` false finished a stretch of work nobody logged.

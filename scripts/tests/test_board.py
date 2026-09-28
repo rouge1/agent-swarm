@@ -229,6 +229,29 @@ class ScanTest(BoardTestBase):
         self.claude_subagent("Build b", [{"type": "text", "text": "x"}])  # no tag: not matched to a task
         self.assertEqual(swarm.in_flight(), [])
 
+    def test_claude_subagent_waiting_on_background_job(self):
+        swarm.emit({"type": "task", "phase": "p1", "task": "b", "model": "sonnet", "status": "working"})
+        sub = self.sessions / "sess1" / "subagents"
+        (sub / "agent-1.meta.json").write_text(json.dumps({"description": "[p1:b] Review b"}))
+        launch = {"type": "assistant", "timestamp": "2026-09-27T10:01:00Z", "message": {"stop_reason": "tool_use", "content": [
+            {"type": "tool_use", "id": "toolu_1", "name": "Bash",
+             "input": {"command": "pytest -m smoke", "description": "full smoke suite", "run_in_background": True}}]}}
+        hold = {"type": "assistant", "timestamp": "2026-09-27T10:01:05Z", "message": {"stop_reason": "end_turn", "content": [
+            {"type": "text", "text": "Holding for the notification."}]}}
+        jl(sub / "agent-1.jsonl", {"type": "user", "timestamp": "2026-09-27T10:00:00Z", "message": {"content": "go"}},
+           launch, {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "toolu_1"}]}}, hold)
+        ag = swarm.in_flight()[0]
+        self.assertEqual((ag["waiting"], ag["ended"], ag["doing"]), ("full smoke suite", False, "waiting: full smoke suite"))
+        self.assertIn("waiting on a background job", run_cli("agents"))
+        # the job's notification arrives and the agent writes its report: now it has finished
+        done = {"type": "assistant", "timestamp": "2026-09-27T10:20:00Z", "message": {"stop_reason": "end_turn", "content": [
+            {"type": "text", "text": "Review: 2 findings."}]}}
+        jl(sub / "agent-1.jsonl", {"type": "user", "timestamp": "2026-09-27T10:00:00Z", "message": {"content": "go"}}, launch, hold,
+           {"type": "queue-operation", "content": "<task-notification>\n<tool-use-id>toolu_1</tool-use-id>\n<status>completed</status>"},
+           {"type": "user", "message": {"content": "<task-notification>..."}}, done)
+        ag = swarm.in_flight()[0]
+        self.assertEqual((ag["waiting"], ag["ended"]), (None, True))
+
     def test_claude_subagent_not_working(self):
         swarm.emit({"type": "task", "phase": "p1", "task": "b", "model": "sonnet", "status": "review"})
         self.claude_subagent("[p1:b] Build b", [{"type": "tool_use", "name": "Read", "input": {}}])

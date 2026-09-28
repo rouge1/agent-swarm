@@ -898,22 +898,47 @@ def _claude_subagent_dirs(events: list[dict]) -> list[Path]:
     return sorted(d for d in SESSION_DIR.glob("*/subagents") if d.stat().st_mtime >= since)
 
 
-def _claude_span(transcript: Path) -> tuple[int | None, int | None, bool]:
-    """First and last message times (ms) of a transcript, and whether its last turn ended the agent's work
-    (a final answer with no tool call pending)."""
+def _is_background(block: dict) -> bool:
+    """A tool call that starts a job and returns at once; the agent is woken by a <task-notification>
+    naming the call's id when the job ends. Until then a quiet transcript means waiting, not stalled."""
+    inp = block.get("input") or {}
+    return block.get("name") == "Monitor" or bool(inp.get("run_in_background"))
+
+
+def _claude_state(transcript: Path, roots: list[str]) -> dict:
+    """First and last message times (ms) of a transcript; the background job it is waiting on, if any
+    (the description of the latest background call with no completion notification yet and no other tool
+    call after it); and whether it has ended: a final answer with no tool call and no job pending."""
     from datetime import datetime
 
-    times, ended = [], False
-    for d in _json_lines(transcript):
+    times, ended, pending, last_tool = [], False, {}, None
+    lines = _tail_lines(transcript)
+    notified = "\n".join(line for line in lines if "<task-notification>" in line)
+    for line in lines:
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
         ts = d.get("timestamp")
         if ts:
             times.append(int(datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() * 1000))
         m = d.get("message") or {}
         if d.get("type") == "assistant" and isinstance(m.get("content"), list):
-            ended = m.get("stop_reason") == "end_turn" and not any(b.get("type") == "tool_use" for b in m["content"])
+            tools = [b for b in m["content"] if b.get("type") == "tool_use"]
+            for b in tools:
+                last_tool = b
+                if _is_background(b) and b.get("id") and b["id"] not in notified:
+                    inp = b.get("input") or {}
+                    pending[b["id"]] = _trim_paths(str(inp.get("description") or inp.get("command")
+                                                       or inp.get("prompt") or b.get("name", "job")), roots)
+            ended = m.get("stop_reason") == "end_turn" and not tools
         elif d.get("type") == "user":
             ended = False
-    return (times[0] if times else None), (times[-1] if times else None), ended
+    waiting = None
+    if last_tool is not None and last_tool.get("id") in pending:
+        waiting = " ".join(pending[last_tool["id"]].split())[:80]
+    return {"started": times[0] if times else None, "last": times[-1] if times else None,
+            "ended": ended and not pending, "waiting": waiting}
 
 
 def in_flight(events: list[dict] | None = None) -> list[dict]:
@@ -962,15 +987,15 @@ def in_flight(events: list[dict] | None = None) -> list[dict]:
                 continue
             key = owners[0]
             acts = claude_actions(transcript, [repo])
-            started, last, done = _claude_span(transcript)
+            state = _claude_state(transcript, [repo])
             since = tasks[key].get("t", 0)
             logged = any(e["type"] == "run" and (e["phase"], e["task"], e.get("model")) == key and e["t"] >= since
                          for e in events)
             agents.append({"phase": key[0], "task": key[1], "model": key[2], "runtime": "claude",
                            "status": tasks[key]["status"], "log": str(transcript),
                            "idle_s": int(time.time() - transcript.stat().st_mtime), "actions": acts,
-                           "doing": latest(acts), "started": started, "last": last, "ended": done,
-                           "run_logged": logged})
+                           "doing": f"waiting: {state['waiting']}" if state["waiting"] else latest(acts),
+                           **state, "run_logged": logged})
     return agents
 
 
@@ -1010,7 +1035,9 @@ def cmd_agents(a):
         flags = []
         if ag.get("pid") and not ag.get("alive"):
             flags.append("CRASHED")
-        if ag["idle_s"] > 600:
+        if ag.get("waiting"):
+            flags.append(f"waiting on a background job {ag['idle_s'] // 60}m")
+        elif ag["idle_s"] > 600:
             flags.append(f"quiet {ag['idle_s'] // 60}m")
         if ag.get("ended"):
             flags.append("finished" + ("" if ag.get("run_logged") else ", run not logged"))
