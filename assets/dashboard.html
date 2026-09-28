@@ -121,6 +121,7 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 /* one letter per line, spaced out wide for a short word and closing up as the word gets longer (--gap) */
 .edge .word { display: flex; flex-direction: column; align-items: center; gap: var(--gap, 0px); font: 700 var(--fs, 13px)/.9 var(--label); text-transform: uppercase; }
 .wheel-card.done .edge { color: var(--ok); }
+.wheel-card.deferred .edge { color: var(--warn); }
 .wheel-card.active .edge { color: var(--accent); }
 .wheel-card.active .edge .num { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .wheel-card.back { cursor: pointer; }
@@ -136,6 +137,7 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .phase-tag b.done { color: var(--ok); }
 .phase-tag b.active { color: var(--accent); }
 .phase-tag b.future { color: var(--muted); }
+.phase-tag b.deferred { color: var(--warn); }
 .wheel-card h2 { font-size: 26px; line-height: 1.15; }
 .wheel-card h2 span { color: var(--accent); }
 .wheel-card p { margin: 0; color: var(--muted); }
@@ -165,6 +167,7 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .phasemap { display: grid; gap: 4px; justify-content: center; }
 .pm-cell { border: 1px solid var(--line); background: var(--panel); border-radius: 4px; height: 22px; width: 26px; display: flex; align-items: center; justify-content: center; font: 600 10px/1 var(--mono); color: var(--muted); }
 .pm-cell.done { background: var(--panel-2); color: var(--ok); }
+.pm-cell.deferred { background: var(--panel-2); color: var(--warn); border-style: dashed; border-color: var(--warn); }
 .pm-cell.active { position: relative; color: var(--accent); font-weight: 700; border-color: var(--accent); }
 /* the current phase's cell pulses: a ring of the accent swells out from it and fades */
 .pm-cell.active::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 0 var(--accent); animation: pm-pulse 1.8s ease-out infinite; pointer-events: none; }
@@ -403,7 +406,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
       switch (e.type) {
         case "phase": { // t = when the phase started, end = when it was marked done
           const prev = s.phases[e.phase];
-          s.phases[e.phase] = { status: e.status, t: prev?.t ?? e.t, end: e.status === "done" ? e.t : undefined };
+          s.phases[e.phase] = { status: e.status, t: prev?.t ?? e.t, end: e.status === "done" || e.status === "deferred" ? e.t : undefined };
           if (e.status === "active") s.cur = e.phase; break;
         }
         case "task": { const t = task(); if (e.status !== t.status) { t.since = e.t; t.doing = t.say = null; } t.status = e.status; if (e.title) t.title = e.title; if ("note" in e) t.note = e.note; break; }
@@ -498,7 +501,9 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     const who = (m) => `<span class="chip" style="--c:${colorOf(m)}">${esc(modelName(m))}</span>`;
     const tk = `<b>${esc(e.task)}</b>`;
     switch (e.type) {
-      case "phase": return e.status === "active" ? `Phase <b>${esc(e.phase.toUpperCase())}</b> started: ${esc(phaseTitle(e.phase))}` : `Phase <b>${esc(e.phase.toUpperCase())}</b> complete`;
+      case "phase": return e.status === "active" ? `Phase <b>${esc(e.phase.toUpperCase())}</b> started: ${esc(phaseTitle(e.phase))}`
+        : e.status === "deferred" ? `Phase <b>${esc(e.phase.toUpperCase())}</b> deferred: moved on before its exit criterion was met`
+        : `Phase <b>${esc(e.phase.toUpperCase())}</b> complete`;
       case "task": return `${e.model ? who(e.model) : who(null)} ${tk} → <span class="pill" style="--s:${STATUS[e.status][1]}">${STATUS[e.status][0]}</span>${e.note ? ` <span style="color:var(--muted)">${esc(e.note)}</span>` : ""}`;
       case "run": return `${who(e.model)} finished a ${e.kind} run on ${tk}: <span class="mono">${fmtS(e.wall_s)} · ${fmtK((e.tokens_in || 0) + (e.tokens_out || 0))} tok · ${fmtC(e.cost)}</span>${runFailed(e) ? ` <span class="pill" style="--s:var(--bug)">${esc(e.outcome && e.outcome !== "ok" ? e.outcome : "error")}</span>` : ""}${e.reason ? ` <span style="color:var(--muted)">${esc(e.reason)}</span>` : ""}`;
       case "review": return `${who("reviewer")} reviewed ${tk} by ${esc(modelName(e.model))}: <span class="pill" style="--s:${e.verdict === "pass" ? "var(--ok)" : "var(--warn)"}">${e.verdict === "pass" ? "Approved" : `${e.findings} change${e.findings === 1 ? "" : "s"} requested`}</span>${e.summary ? ` <span style="color:var(--muted)">${esc(e.summary)}</span>` : ""}`;
@@ -592,8 +597,9 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     for (let i = start; i <= end; i++) {
       const p = phases[i]; const off = i - focusedIdx; const isFront = off === 0;
       const ps = s.phases[p.id]; const done = ps?.status === "done"; const isCur = p.id === curId && !!ps;
-      const cls = done ? "done" : isCur ? "active" : "future";
-      const label = done ? "✓ Complete" : isCur ? "In progress" : "Up next";
+      const deferred = ps?.status === "deferred"; // moved on before its exit criterion was met
+      const cls = done ? "done" : deferred ? "deferred" : isCur ? "active" : "future";
+      const label = done ? "✓ Complete" : deferred ? "Deferred" : isCur ? "In progress" : "Up next";
       const spendP = Object.values(s.spend[p.id] || {});
       const pStart = ps?.t;
       const elapsed = pStart ? ((done ? ps.end : T) - pStart) / 1000 : 0;
@@ -662,7 +668,8 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     map.style.gridTemplateColumns = `repeat(${n}, 26px)`;
     map.innerHTML = phases.map((p, i) => {
       const ps = s.phases[p.id]; const done = ps?.status === "done"; const isCur = p.id === curId && !!ps;
-      const cls = done ? "done" : isCur ? "active" : "future";
+      const deferred = ps?.status === "deferred"; // moved on before its exit criterion was met
+      const cls = done ? "done" : deferred ? "deferred" : isCur ? "active" : "future";
       return `<button class="pm-cell ${cls} ${p.id === view ? "pm-focus" : ""}" data-id="${esc(p.id)}" aria-current="${isCur}" aria-label="Phase ${i}: ${esc(p.title)}" title="${esc(p.title)}">${i}</button>`;
     }).join("");
     const side = isNarrow() ? 1 : 2;

@@ -242,6 +242,10 @@ class ScribeCommandsTest(BoardTestBase):
         self.assertEqual((data[0]["task"], data[0]["actions"]), ("a", ["list_dir · ."]))
         self.assertIn("p1/a grokw (grok, working)", run_cli("agents"))
 
+    def test_phase_deferred(self):
+        run_cli("phase", "p1", "deferred")
+        self.assertEqual(self.events("phase")[0]["status"], "deferred")
+
     def test_activity_summary_and_log_run(self):
         run_cli("activity", "p1", "b", "sonnet", "Writing the parser; tests not run yet")
         ev = self.events("activity")[0]

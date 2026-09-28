@@ -22,7 +22,8 @@
   End goes back to live). The bake-off scorecard
   appears inside a phase card only while that phase has scored tasks that aren't all merged/dropped yet -- once
   settled it disappears.
-- **phase map**: every phase as a tiny numbered cell, coloured by status, with a window box outlining exactly the
+- **phase map**: every phase as a tiny numbered cell, coloured by status (a `deferred` phase, left with its
+  exit criterion not met yet, is amber with a dashed outline, and its card says "Deferred"), with a window box outlining exactly the
   phases currently in the stack; click a cell to focus that phase, or drag the window along the map and
   the stack follows, card by card, with the cards sliding into place
 - **task board** for the focused phase: queued, in progress, in review, done

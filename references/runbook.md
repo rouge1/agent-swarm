@@ -43,7 +43,7 @@ OpenCode runs cost cents.
 | `swarm.py task <phase> <task> <queued\|working\|review\|fixing\|merged\|failed\|dropped> [--model m] [--note ..]` | Update a task card (`run` sets working/review itself) |
 | `swarm.py note "<text>"` | Add a line to the activity feed |
 | `swarm.py score <phase> <task> <model> <0-100> --summary ".."` | Bake-off score |
-| `swarm.py phase <phase> active\|done` | Phase state |
+| `swarm.py phase <phase> active\|done\|deferred` | Phase state; `deferred` = moving on with the exit criterion not met yet (mark it `done` when it is) |
 | `swarm.py health` | In-flight runs and how long since each log last grew; HUNG after 600 s |
 | `swarm.py cost [--phase p]` | OpenCode and Claude cost per model |
 | `swarm.py claude` | Tally Claude usage from transcripts (run before dashboard pushes) |

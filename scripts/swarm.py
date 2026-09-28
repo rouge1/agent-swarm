@@ -1322,7 +1322,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--detach", metavar="BRANCH", help="make a detached review worktree rv-<task> of BRANCH")
     s.set_defaults(fn=cmd_wt)
 
-    s = sub.add_parser("phase"); s.add_argument("phase"); s.add_argument("status", choices=["active", "done"])
+    s = sub.add_parser("phase", help="active, done, or deferred (moved on with the exit criterion not met yet)")
+    s.add_argument("phase"); s.add_argument("status", choices=["active", "done", "deferred"])
     s.set_defaults(fn=cmd_phase)
 
     s = sub.add_parser("task"); s.add_argument("phase"); s.add_argument("task")
