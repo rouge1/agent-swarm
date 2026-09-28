@@ -728,6 +728,14 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
       if (CREW_KEYS.has(l.key)) {
         const c = s.crew[l.key];
         if (c?.state === "busy") { busy = true; doing = esc(c.doing); since = c.t; }
+        else {
+          // no crew event saying so, but a Claude orchestrator's transcript grew in the last 5 minutes (the
+          // tally logs a `claude` event each time it changes): it's working, not idle
+          const seen = Math.max(0, ...Object.values(s.claude).filter((e) => e.role === l.key).map((e) => e.t));
+          if (seen && T - seen < 300000 && (!c || c.t < seen)) {
+            busy = true; doing = `Active <span style="color:var(--muted)">· transcript updated ${fmtS((T - seen) / 1000)} ago</span>`;
+          }
+        }
       } else {
         const act = tasks.filter((t) => t.model === l.key && (t.status === "working" || t.status === "fixing")).sort((a, b) => b.since - a.since)[0];
         if (act) { busy = true; since = act.since; doing = `${act.status === "fixing" ? "Fixing" : "Building"} <b>${esc(act.title || act.task)}</b> <span class="mono" style="color:var(--muted)">${esc(act.phase.toUpperCase())}</span>${nowHtml(act, T)}`; }
