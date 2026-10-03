@@ -98,6 +98,11 @@ agent-swarm/
    - the first acceptance tests
 
    Check your own tests against a private reference implementation kept outside the repo. Commit on `main`.
+
+   **Record work of your own as a task**, so the board and the spend can tell it from orchestrating:
+   `swarm.py task p0 skeleton working --model orchestrator --title "Repo skeleton"`, then `review` or `merged`
+   when it is done. Anything you do while such a task is `working` or `fixing` counts as your own work; the
+   rest (writing specs, launching managers, waiting, reading reports) is orchestration and needs no task.
 5. **Dashboard:** start the local board (`swarm.py watch --serve 8765`, see below) so the user can watch from
    the first phase.
 

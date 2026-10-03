@@ -208,6 +208,7 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .now .act { color: var(--muted); font-family: var(--mono); font-size: 10.5px; overflow-wrap: anywhere; }
 .now .flag { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--warn); }
 .now .flag.crashed { color: var(--bug); }
+.own { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; }
 .card.dropped { opacity: .6; }
 .card.failed { border-color: var(--bug); }
 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 7px 1px 5px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); color: var(--c); background: color-mix(in srgb, var(--c) 10%, transparent); white-space: nowrap; }
@@ -443,8 +444,8 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     const rows = {};
     for (const e of Object.values(s.claude)) {
       if (phase && e.phase !== phase) continue;
-      const r = rows[`${e.role}|${e.model}`] ??= { role: e.role, model: e.model, name: e.name, messages: 0, output: 0, tokens: 0, cost: 0 };
-      r.messages += e.messages; r.output += e.output; r.cost += e.cost;
+      const r = rows[`${e.role}|${e.model}`] ??= { role: e.role, model: e.model, name: e.name, messages: 0, output: 0, tokens: 0, cost: 0, workCost: 0 };
+      r.messages += e.messages; r.output += e.output; r.cost += e.cost; r.workCost += e.work_cost || 0; // work_cost: the orchestrator's own tasks, part of cost
       r.tokens += e.input + e.output + e.cache_read + e.cache_write;
     }
     return Object.values(rows).sort((a, b) => (a.role > b.role ? 1 : -1) || b.cost - a.cost);
@@ -465,7 +466,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     const rows = [{
       key: "orchestrator", name: "Orchestrator", runs: null, reruns: null, failed: null, wall: null,
       tokens: orch.reduce((a, e) => a + e.input + e.output + e.cache_read + e.cache_write, 0),
-      cost: orch.reduce((a, e) => a + e.cost, 0),
+      cost: orch.reduce((a, e) => a + e.cost, 0), workCost: orch.reduce((a, e) => a + (e.work_cost || 0), 0),
     }];
     for (const m of st.meta?.models || []) {
       const r = (s.spend[ph] || {})[m.key] || { runs: 0, reruns: 0, failed: 0, wall: 0, tokens: 0, cost: 0 };
@@ -483,6 +484,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
 
   // a Claude-driven lane's runs only count once logged (`swarm.py log-run`); until then its tokens and cost
   // show but its run cells say so instead of a misleading 0
+  const ownWork = (c) => c ? `<span class="own">own work ${fmtC(c)}</span>` : "";
   const NOT_LOGGED = `<span class="nl" title="Claude subagent runs are counted once logged with swarm.py log-run; tokens and cost come from the transcripts">not logged</span>`;
 
   function phaseSpendTableHtml(s, ph) {
@@ -491,7 +493,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     return `<thead><tr><th>Agent</th><th>Runs</th><th>Reruns</th><th>Failed</th><th>Wall</th><th>Tokens</th><th>Cost</th></tr></thead><tbody>` +
       rows.map((r) => `<tr><td><span class="chip" style="--c:${colorOf(r.key)}">${esc(r.name)}</span></td>
         ${r.notLogged ? `<td class="num" colspan="4">${NOT_LOGGED}</td><td class="num">${fmtK(r.tokens)}</td><td class="num">${fmtC(r.cost)}</td></tr>` : `<td class="num">${na(r.runs)}</td><td class="num">${na(r.reruns)}</td><td class="num">${r.failed ? `<span style="color:var(--bug)">${r.failed}</span>` : na(r.failed)}</td>
-        <td class="num">${r.wall != null ? fmtS(r.wall) : "–"}</td><td class="num">${fmtK(r.tokens)}</td><td class="num">${fmtC(r.cost)}</td></tr>`}`).join("") + "</tbody>";
+        <td class="num">${r.wall != null ? fmtS(r.wall) : "–"}</td><td class="num">${fmtK(r.tokens)}</td><td class="num">${fmtC(r.cost)}${ownWork(r.workCost)}</td></tr>`}`).join("") + "</tbody>";
   }
 
   // bake-off scorecard for one phase: only while at least one scored task there is still unsettled
@@ -740,13 +742,16 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
       let busy = false, doing = `<span class="idle">Idle</span>`, since = null;
       if (CREW_KEYS.has(l.key)) {
         const c = s.crew[l.key];
-        if (c?.state === "busy") { busy = true; doing = esc(c.doing); since = c.t; }
+        // the orchestrator's own work is a task it holds, shown like any worker's; the rest is orchestration
+        const own = tasks.filter((t) => t.model === l.key && (t.status === "working" || t.status === "fixing")).sort((a, b) => b.since - a.since)[0];
+        if (own) { busy = true; since = own.since; doing = `${own.status === "fixing" ? "Fixing" : "Building"} <b>${esc(own.title || own.task)}</b> <span class="mono" style="color:var(--muted)">${esc(own.phase.toUpperCase())}</span>${nowHtml(own, T)}`; }
+        else if (c?.state === "busy") { busy = true; doing = `Orchestrating <span style="color:var(--muted)">· ${esc(c.doing)}</span>`; since = c.t; }
         else {
           // no crew event saying so, but a Claude orchestrator's transcript grew in the last 5 minutes (the
           // tally logs a `claude` event each time it changes): it's working, not idle
           const seen = Math.max(0, ...Object.values(s.claude).filter((e) => e.role === l.key).map((e) => e.t));
           if (seen && T - seen < 300000 && (!c || c.t < seen)) {
-            busy = true; doing = `Active <span style="color:var(--muted)">· transcript updated ${fmtS((T - seen) / 1000)} ago</span>`;
+            busy = true; doing = `Orchestrating <span style="color:var(--muted)">· transcript updated ${fmtS((T - seen) / 1000)} ago</span>`;
           }
         }
       } else {
@@ -761,7 +766,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
           : `<span class="num">${r.runs} runs · ${fmtS(r.wall)} · ${fmtC(pr ? pr.cost : r.cost)}</span>`;
       } else {
         const cr = claudeRows(s, view).filter((r) => r.role === l.key);
-        if (cr.length) metaRight = `<span class="num">${cr.map((r) => `${esc(r.name)} ${fmtC(r.cost)}`).join(" · ")}</span>`;
+        if (cr.length) metaRight = `<span class="num">${cr.map((r) => `${esc(r.name)} ${fmtC(r.cost)}${r.workCost ? ` · own work ${fmtC(r.workCost)}` : ""}`).join(" · ")}</span>`;
       }
       return `<article class="lane ${busy ? "busy" : ""}" style="--c:${colorOf(l.key)}">
         <div class="who"><span class="sig"></span><h3>${esc(l.name)}</h3></div>
@@ -823,7 +828,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
           `<tr><th>Role · model</th><th>Runs</th><th>Reruns</th><th>Failed</th><th>Msgs</th><th>Tokens</th><th>Cost</th></tr>` +
           cr.map((r) => { const lr = laneRuns(idMap[r.model]); const na = r.role === "orchestrator" || !lr;
             const unlogged = !na && !lr.runs && r.tokens > 0;
-            return `<tr><td><span class="chip" style="--c:${colorOf(r.role)}">${r.role === "orchestrator" ? "Orchestrator" : "Subagent"} · ${esc(r.name)}</span></td>${unlogged ? `<td class="num" colspan="3">${NOT_LOGGED}</td>` : `<td class="num">${na ? "–" : lr.runs}</td><td class="num">${na ? "–" : lr.reruns}</td><td class="num">${na ? "–" : failCell(lr.failed)}</td>`}<td class="num">${r.messages}</td><td class="num">${fmtK(r.tokens)}</td><td class="num">${fmtC(r.cost)}</td></tr>`; }).join("") +
+            return `<tr><td><span class="chip" style="--c:${colorOf(r.role)}">${r.role === "orchestrator" ? "Orchestrator" : "Subagent"} · ${esc(r.name)}</span></td>${unlogged ? `<td class="num" colspan="3">${NOT_LOGGED}</td>` : `<td class="num">${na ? "–" : lr.runs}</td><td class="num">${na ? "–" : lr.reruns}</td><td class="num">${na ? "–" : failCell(lr.failed)}</td>`}<td class="num">${r.messages}</td><td class="num">${fmtK(r.tokens)}</td><td class="num">${fmtC(r.cost)}${ownWork(r.workCost)}</td></tr>`; }).join("") +
           `<tr class="total"><td>Claude total</td><td colspan="5"></td><td class="num">${fmtC(ct)}</td></tr>` +
           `<tr class="total"><td>Project total</td><td colspan="5"></td><td class="num">${fmtC(ct + (tot.cost || 0))}</td></tr></tbody>`;
       })();

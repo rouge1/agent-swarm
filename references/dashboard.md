@@ -28,8 +28,12 @@
   the stack follows, card by card, with the cards sliding into place
 - **task board** for the focused phase: queued, in progress, in review, done
 - **worker lanes**: the orchestrator plus one lane per model, with live "doing"/idle status and that lane's
-  totals for the focused phase. The orchestrator lane is busy while a `crew orchestrator busy` event says so,
-  or, for a Claude orchestrator, while its transcript tally changed in the last 5 minutes
+  totals for the focused phase. The orchestrator lane tells work from orchestration: while the orchestrator
+  holds a task of its own (`swarm.py task ... --model orchestrator`, `working` or `fixing`) it reads
+  "Building <task>", like any worker; otherwise, while a `crew orchestrator busy` event says so or (for a Claude
+  orchestrator) its transcript tally changed in the last 5 minutes, it reads "Orchestrating". Its spend is
+  split the same way: the tally logs what part of the orchestrator's total fell inside its own tasks
+  (`work_messages`, `work_output`, `work_cost` on its `claude` event), shown as "own work $x" under its cost
 - **spend**: the all-phases table (non-Claude workers, then Claude orchestrator + subagents); per-phase spend
   lives in the wheel's chevron instead of a scope toggle here
 - the activity feed

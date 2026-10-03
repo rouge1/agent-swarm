@@ -346,6 +346,69 @@ class WhereTest(BoardTestBase):
         self.assertEqual((ag["dir"], ag["branch"]), (start["dir"], "p1/a-grokw"))
 
 
+class OrchestratorWorkTest(BoardTestBase):
+    """The orchestrator's own work is a task it holds; the rest of what it spends is orchestration."""
+
+    def setUp(self):
+        super().setUp()
+        patcher = unittest.mock.patch.dict(swarm.CLAUDE_PRICES, {"claude-opus-5-5": (0, 10.0, 0, 0, 0)})  # $10 / 1M output
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def put(self, *events):
+        swarm.DATA.mkdir(parents=True, exist_ok=True)
+        swarm.EVENTS.write_text("".join(json.dumps(e) + "\n" for e in events))
+
+    def transcript(self, name, stamps):
+        """An orchestrator transcript with one assistant message per timestamp (ISO), 1M output tokens each."""
+        rows = [{"type": "assistant", "timestamp": ts,
+                 "message": {"id": f"m{i}", "model": "claude-opus-5-5",
+                             "usage": {"input_tokens": 0, "output_tokens": 1_000_000}}}
+                for i, ts in enumerate(stamps)]
+        jl(self.sessions / f"{name}.jsonl", *rows)
+
+    def at(self, iso):
+        from datetime import datetime
+        return int(datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+
+    def test_windows_span_working_to_the_next_status(self):
+        self.put(
+            {"t": 1000, "type": "task", "phase": "p0", "task": "skeleton", "model": "orchestrator", "status": "working"},
+            {"t": 5000, "type": "task", "phase": "p0", "task": "skeleton", "model": "orchestrator", "status": "review"},
+            {"t": 7000, "type": "task", "phase": "p0", "task": "skeleton", "model": "orchestrator", "status": "fixing"},
+            {"t": 2000, "type": "task", "phase": "p0", "task": "other", "model": "grokw", "status": "working"})
+        self.assertEqual(swarm.orchestrator_work_windows(swarm.load_events()), [(1000, 5000), (7000, float("inf"))])
+
+    def test_tally_splits_own_work_from_orchestration(self):
+        t = [self.at(x) for x in ("2026-09-27T10:00:00Z", "2026-09-27T10:10:00Z", "2026-09-27T10:20:00Z")]
+        self.put(
+            {"t": t[0], "type": "phase", "phase": "p1", "status": "active"},
+            {"t": t[1] - 1000, "type": "task", "phase": "p1", "task": "skeleton", "model": "orchestrator", "status": "working"},
+            {"t": t[1] + 1000, "type": "task", "phase": "p1", "task": "skeleton", "model": "orchestrator", "status": "review"})
+        # messages at 10:00 (orchestrating), 10:10 (inside the task), 10:20 (orchestrating again)
+        self.transcript("sess1", ["2026-09-27T10:00:00Z", "2026-09-27T10:10:00Z", "2026-09-27T10:20:00Z"])
+        agg, changed = swarm.claude_tally("sess1")
+        ev = self.events("claude")[-1]
+        self.assertEqual((ev["role"], ev["messages"], round(ev["cost"], 2)), ("orchestrator", 3, 30.0))
+        self.assertEqual((ev["work_messages"], ev["work_output"], round(ev["work_cost"], 2)), (1, 1_000_000, 10.0))
+        self.assertEqual(changed, 1)
+        self.assertEqual(swarm.claude_tally("sess1")[1], 0)  # nothing new: not logged again
+
+    def test_no_work_fields_without_an_orchestrator_task(self):
+        self.put({"t": 1, "type": "phase", "phase": "p1", "status": "active"})
+        self.transcript("sess1", ["2026-09-27T10:05:00Z"])
+        swarm.claude_tally("sess1")
+        ev = self.events("claude")[-1]
+        self.assertNotIn("work_cost", ev)
+
+    def test_cost_and_claude_commands_show_the_split(self):
+        t = self.at("2026-09-27T10:10:00Z")
+        self.put({"t": t - 1000, "type": "task", "phase": "p1", "task": "skeleton", "model": "orchestrator", "status": "working"})
+        self.transcript("sess1", ["2026-09-27T10:10:00Z", "2026-09-27T09:00:00Z"])
+        self.assertIn("of which own work", run_cli("claude", "--session", "sess1"))
+        self.assertIn("of which orchestrator own work", run_cli("cost"))
+
+
 class ScribeCommandsTest(BoardTestBase):
     def test_agents_json_and_text(self):
         self.start_run("a", "grokw", [{"type": "tool_call", "toolName": "list_dir", "rawInput": {"path": "."}}])

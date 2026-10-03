@@ -731,6 +731,9 @@ def cmd_cost(a):
     if last:
         claude_total = sum(e["cost"] for e in last.values())
         print(f"{'':<6}{'claude total (list price)':<28}{'':>5}{'':>10}{'':>10}{claude_total:>10.4f}")
+        own = sum(e.get("work_cost", 0) for e in last.values())
+        if own:
+            print(f"{'':<6}{'  of which orchestrator own work':<28}{'':>5}{'':>10}{'':>10}{own:>10.4f}")
         print(f"{'':<6}{'grand total':<28}{'':>5}{'':>10}{'':>10}{oc_total + claude_total:>10.4f}")
 
 
@@ -1302,6 +1305,24 @@ def _read_transcript(path: Path) -> list[dict]:
     return list(msgs.values())
 
 
+ORCH = "orchestrator"  # the model key of a task the orchestrator does itself (`swarm.py task ... --model orchestrator`)
+
+
+def orchestrator_work_windows(events: list[dict]) -> list[tuple[int, float]]:
+    """[start, end) ms spans in which the orchestrator held a task of its own that was working or fixing.
+    What it spends then is its own work; everything else it spends is orchestration."""
+    spans, opened = [], {}
+    for e in events:
+        if e["type"] != "task" or e.get("model") != ORCH:
+            continue
+        key = (e["phase"], e["task"])
+        if e["status"] in ACTIVE:
+            opened.setdefault(key, e["t"])
+        elif key in opened:
+            spans.append((opened.pop(key), e["t"]))
+    return spans + [(t0, float("inf")) for t0 in opened.values()]
+
+
 def claude_tally(session: str) -> tuple[dict, int] | None:
     """Tally Claude (orchestrator + subagent) tokens and list-price cost per phase and model; log the
     tallies that changed. Returns (per (phase, role, model) totals, number logged), or None when there
@@ -1332,6 +1353,7 @@ def claude_tally(session: str) -> tuple[dict, int] | None:
                 ph = p
         return ph
 
+    own_work = orchestrator_work_windows(events)
     agg = defaultdict(lambda: defaultdict(float))
     for role, path in sources:
         for m in _read_transcript(path):
@@ -1350,6 +1372,11 @@ def claude_tally(session: str) -> tuple[dict, int] | None:
             pi, po, pr, pw5, pw1 = CLAUDE_PRICES.get(key, (0, 0, 0, 0, 0))
             r["cost"] += (u.get("input_tokens", 0) or 0) * pi / 1e6 + (u.get("output_tokens", 0) or 0) * po / 1e6
             r["cost"] += (u.get("cache_read_input_tokens", 0) or 0) * pr / 1e6 + w5m * pw5 / 1e6 + w1h * pw1 / 1e6
+            if role == "orchestrator" and any(a <= ms < b for a, b in own_work):
+                r["work_messages"] += 1
+                r["work_output"] += u.get("output_tokens", 0) or 0
+                r["work_cost"] += (u.get("input_tokens", 0) or 0) * pi / 1e6 + (u.get("output_tokens", 0) or 0) * po / 1e6 \
+                    + (u.get("cache_read_input_tokens", 0) or 0) * pr / 1e6 + w5m * pw5 / 1e6 + w1h * pw1 / 1e6
 
     # log only what changed since the last tally
     last = {}
@@ -1361,8 +1388,12 @@ def claude_tally(session: str) -> tuple[dict, int] | None:
         ev = {"type": "claude", "phase": ph, "role": role, "model": model, "name": CLAUDE_NAMES.get(model, model),
               "messages": int(r["messages"]), "input": int(r["input"]), "output": int(r["output"]),
               "cache_read": int(r["cache_read"]), "cache_write": int(r["cache_write"]), "cost": round(r["cost"], 4)}
+        if r["work_messages"]:  # the part of an orchestrator's total that was its own work, not orchestration
+            ev.update(work_messages=int(r["work_messages"]), work_output=int(r["work_output"]),
+                      work_cost=round(r["work_cost"], 4))
         prev = last.get((ph, role, model))
-        if not prev or prev["messages"] != ev["messages"] or prev["output"] != ev["output"]:
+        if (not prev or prev["messages"] != ev["messages"] or prev["output"] != ev["output"]
+                or prev.get("work_messages", 0) != ev.get("work_messages", 0)):
             emit(ev)
             changed += 1
     return agg, changed
@@ -1383,6 +1414,10 @@ def cmd_claude(a):
     for (role, model), r in sorted(tot.items()):
         print(f"{role:<13}{CLAUDE_NAMES.get(model, model):<11}{int(r['messages']):>6}{int(r['output']):>10,}"
               f"{int(r['cache_read']):>12,}{int(r['cache_write']):>11,}{r['cost']:>10.2f}")
+    work = {k: sum(r["work_cost"] for (ph, role, model), r in agg.items() if (role, model) == k) for k in tot}
+    for (role, model), w in sorted(work.items()):
+        if w:
+            print(f"{'':<13}{CLAUDE_NAMES.get(model, model):<11}{'of which own work, not orchestration':>38}{w:>10.2f}")
     print(f"logged {changed} changed tallies")
 
 
@@ -1434,7 +1469,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("task"); s.add_argument("phase"); s.add_argument("task")
     s.add_argument("status", choices=["queued", "working", "review", "fixing", "merged", "failed", "dropped"])
-    s.add_argument("--model"); s.add_argument("--title"); s.add_argument("--note"); s.add_argument("--files")
+    s.add_argument("--model", help="the worker's model key, or `orchestrator` for work the orchestrator does itself "
+                                   "(its spend while the task is working or fixing counts as own work)")
+    s.add_argument("--title"); s.add_argument("--note"); s.add_argument("--files")
     s.set_defaults(fn=cmd_task)
 
     s = sub.add_parser("note"); s.add_argument("text"); s.add_argument("--phase")
