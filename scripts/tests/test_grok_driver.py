@@ -370,6 +370,13 @@ class TestFinalize(GrokDriverTestBase):
     def test_files_changed_left_out_when_git_cannot_read_the_dir(self):
         self.assertIsNone(swarm._worktree_files(self.tmp, "HEAD"))
 
+    def test_run_start_records_the_worktree_branch(self):
+        self.load()
+        self.run_grok()
+        start = [e for e in swarm.load_events() if e["type"] == "run_start"][-1]
+        self.assertEqual(start["branch"], "b1/t1-grokw")
+        self.assertEqual(start["dir"], str(self.wt))
+
     def test_cost_unknown_when_total_cost_usd_missing(self):
         self.load()
         self.run_grok(mode="missing_cost")

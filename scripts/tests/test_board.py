@@ -282,3 +282,14 @@ class ScribeCommandsTest(BoardTestBase):
 
 if __name__ == "__main__":
     unittest.main()
+class WhereTest(BoardTestBase):
+    def test_in_flight_run_reports_its_worktree_and_branch(self):
+        self.start_run("a", "grokw", [{"type": "tool_call", "toolName": "grep", "rawInput": {}}])
+        start = next(e for e in swarm.load_events() if e["type"] == "run_start")
+        start["branch"] = "p1/a-grokw"
+        events = [e if e["type"] != "run_start" else start for e in swarm.load_events()]
+        swarm.EVENTS.write_text("".join(json.dumps(e) + "\n" for e in events))
+        ag = swarm.in_flight()[0]
+        self.assertEqual((ag["dir"], ag["branch"]), (start["dir"], "p1/a-grokw"))
+
+

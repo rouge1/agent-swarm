@@ -416,8 +416,10 @@ def cmd_run(a):
         if env_extra:
             popen_kwargs["env"] = {**os.environ, **env_extra}
         proc = subprocess.Popen(cmd, **popen_kwargs)
+        branch = (_git_out(dir_path, "rev-parse", "--abbrev-ref", "HEAD") or "").strip()
         emit({"type": "run_start", "phase": a.phase, "task": a.task, "model": a.model,
-              "dir": str(dir_path), "pid": proc.pid, "log": str(log)})
+              "dir": str(dir_path), "pid": proc.pid, "log": str(log),
+              **({"branch": branch} if branch not in ("", "HEAD") else {})})  # HEAD = detached review worktree
         # watchdog: kill on the overall timeout, or if the worker prints nothing for a.stall seconds
         while proc.poll() is None:
             time.sleep(2)
@@ -1019,7 +1021,8 @@ def in_flight(events: list[dict] | None = None) -> list[dict]:
         agents.append({"phase": e["phase"], "task": e["task"], "model": e["model"], "runtime": driver,
                        "status": tasks.get((e["phase"], e["task"], e["model"]), {}).get("status", "working"),
                        "log": log_s, "idle_s": int(time.time() - log.stat().st_mtime), "pid": pid,
-                       "alive": bool(pid) and _pid_alive(pid), "actions": acts, "doing": latest(acts)})
+                       "alive": bool(pid) and _pid_alive(pid), "started": e["t"], "dir": e.get("dir"),
+                       "branch": e.get("branch"), "actions": acts, "doing": latest(acts)})
 
     for sub in _claude_subagent_dirs(events):
         for meta_f in sorted(sub.glob("agent-*.meta.json")):
