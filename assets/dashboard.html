@@ -170,8 +170,9 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .pm-cell.deferred { background: var(--panel-2); color: var(--warn); border-style: dashed; border-color: var(--warn); }
 .pm-cell.active { position: relative; color: var(--accent); font-weight: 700; border-color: var(--accent); }
 /* the current phase's cell pulses: a ring of the accent swells out from it and fades */
-.pm-cell.active::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 0 var(--accent); animation: pm-pulse 1.8s ease-out infinite; pointer-events: none; }
-@keyframes pm-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--accent) 0%, transparent); } }
+.pm-cell.active::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; border: 2px solid var(--accent); animation: pm-pulse 1.8s ease-out infinite; pointer-events: none; }
+/* transform and opacity only, so the browser animates it on the compositor; animating box-shadow repainted every frame */
+@keyframes pm-pulse { 0% { transform: scale(1); opacity: .7; } 70%, 100% { transform: scale(1.7, 1.8); opacity: 0; } }
 .phasemap-window { position: absolute; top: -4px; bottom: -4px; border: 2px solid var(--accent); border-radius: 6px; pointer-events: none; transition: left .6s cubic-bezier(.45, 0, .2, 1), width .6s cubic-bezier(.45, 0, .2, 1); }
 .dragging .phasemap-window { transition: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
 
@@ -263,7 +264,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   .keys { display: none; }
 }
 @media (max-width: 440px) { .board { grid-template-columns: 1fr; } }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 
 <div class="wrap" id="app">
@@ -1049,7 +1050,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
     if (st.mode === "replay" && atEnd && !st.playing) st.v = vTotal();
     render();
   }
-  setInterval(() => { if (st.mode === "live") render(); }, 1000);
+  setInterval(() => { if (st.mode === "live" && !document.hidden) render(); }, 1000);
 
   // one function, first source that works: embedded replay, then the claude.ai db capability, then
   // (standalone, e.g. `swarm.py watch --serve`) same-origin polling of ./meta.json +
@@ -1076,17 +1077,20 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
       }, (err) => { $("banner").hidden = false; $("banner").textContent = `Live updates stopped (${err.code}). Reload the page to reconnect.`; });
       return;
     }
+    let lastRaw = "";
     const pollOnce = async () => {
       try {
         const [metaRes, eventsRes] = await Promise.all([fetch("./meta.json", { cache: "no-store" }), fetch("./events.json", { cache: "no-store" })]);
         if (!metaRes.ok || !eventsRes.ok) return false;
-        setData(await metaRes.json(), await eventsRes.json());
+        const raw = [await metaRes.text(), await eventsRes.text()];
+        if (raw.join("\n") !== lastRaw) { lastRaw = raw.join("\n"); setData(JSON.parse(raw[0]), JSON.parse(raw[1])); } // unchanged: nothing to redo
         return true;
       } catch { return false; }
     };
     if (await pollOnce()) {
       st.source = "poll";
-      setInterval(pollOnce, 5000);
+      setInterval(() => { if (!document.hidden) pollOnce(); }, 5000);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) { pollOnce(); render(); } }); // catch up on return
       return;
     }
     $("banner").hidden = false;
