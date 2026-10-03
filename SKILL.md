@@ -103,6 +103,7 @@ agent-swarm/
    `swarm.py task p0 skeleton working --model orchestrator --title "Repo skeleton"`, then `review` or `merged`
    when it is done. Anything you do while such a task is `working` or `fixing` counts as your own work; the
    rest (writing specs, launching managers, waiting, reading reports) is orchestration and needs no task.
+   With `[claude] session` set, the task card also shows your latest action, read from your transcript.
 5. **Dashboard:** start the local board (`swarm.py watch --serve 8765`, see below) so the user can watch from
    the first phase.
 

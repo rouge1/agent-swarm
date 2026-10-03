@@ -1000,7 +1000,8 @@ def _claude_state(transcript: Path, roots: list[str]) -> dict:
 def in_flight(events: list[dict] | None = None) -> list[dict]:
     """Every agent working now: {phase, task, model, runtime, status, log, idle_s, actions, doing, ...}.
     Runs from `swarm.py run` also carry pid/alive; Claude subagents carry started/last/ended and whether a
-    `run` event has been logged for this stretch of work yet."""
+    `run` event has been logged for this stretch of work yet. A task the orchestrator holds itself appears
+    as model `orchestrator`, read from its own transcript (needs `claude.session`)."""
     events = load_events() if events is None else events
     repo = CFG.get("project", {}).get("repo", "")
     tasks: dict[tuple, dict] = {}
@@ -1053,6 +1054,20 @@ def in_flight(events: list[dict] | None = None) -> list[dict]:
                            "idle_s": int(time.time() - transcript.stat().st_mtime), "actions": acts,
                            "doing": f"waiting: {state['waiting']}" if state["waiting"] else latest(acts),
                            **state, "run_logged": logged})
+
+    # the orchestrator's own work: a task it holds (--model orchestrator), read from its own transcript.
+    # No `ended` or `run_logged`: it is not a subagent whose finished run someone has to log, and a pause
+    # while it waits for the user must not read as finished.
+    transcript = SESSION_DIR / f"{CLAUDE_SESSION}.jsonl" if CLAUDE_SESSION else None
+    own = [k for k, t in tasks.items() if k[2] == ORCH and t["status"] in ACTIVE]
+    if own and transcript and transcript.exists():
+        acts = claude_actions(transcript, [repo])
+        waiting = _claude_state(transcript, [repo])["waiting"]
+        for key in own:
+            agents.append({"phase": key[0], "task": key[1], "model": ORCH, "runtime": "claude",
+                           "status": tasks[key]["status"], "log": str(transcript),
+                           "idle_s": int(time.time() - transcript.stat().st_mtime), "actions": acts,
+                           "waiting": waiting, "doing": f"waiting: {waiting}" if waiting else latest(acts)})
     return agents
 
 

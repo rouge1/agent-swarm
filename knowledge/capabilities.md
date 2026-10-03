@@ -28,7 +28,7 @@ around the worker, or read from files the agent's own runtime already writes.
 | OpenCode | `swarm.py run` | the run log `<ops>/data/logs/<phase>-<task>-<model>-<ms>.jsonl` (`tool` and `text` parts) | `run_start` records the pid; a `run_end` event closes the run |
 | Grok | `swarm.py run` | the same run log (`streaming-json`: `tool_call` and `text` events) | same |
 | Claude subagent | the orchestrator (Agent tool) | its transcript `<session_dir>/<session>/subagents/agent-*.jsonl` | the transcript: last message time, a final `end_turn` answer, pending background jobs |
-| Claude orchestrator | the user | not read for actions, only tallied; a task it holds shows as "Building <task>" | `crew` events, or a transcript tally that changed in the last 5 minutes |
+| Claude orchestrator | the user | its own transcript `<session_dir>/<session>.jsonl`, but only while it holds a task of its own (`--model orchestrator`); otherwise it is only tallied | `crew` events, or a transcript tally that changed in the last 5 minutes |
 
 Details that decide whether an agent is found:
 
@@ -40,7 +40,9 @@ Details that decide whether an agent is found:
 - **Claude orchestrator: work or orchestration.** What tells them apart is whether it holds a task. A task it
   does itself is `swarm.py task <phase> <task> working --model orchestrator`: its lane reads "Building <task>",
   and what it spends while that task is `working` or `fixing` is counted as its own work (a share of its total,
-  never extra). With no such task it is orchestrating: its lane reads "Orchestrating" while the last `crew`
+  never extra). While it holds such a task its card also shows its latest action, read from its own transcript
+  like a subagent's (needs `[claude] session` in `swarm.toml`; a pause while it waits for you is not "finished",
+  and it is never offered to the scribe as a run to log). With no such task it is orchestrating: its lane reads "Orchestrating" while the last `crew`
   event says it is busy or its transcript tally changed in the last 5 minutes. Under another orchestrator, post
   `swarm.py crew orchestrator busy|idle "<what>"` yourself; its work tasks are ordinary `task` events, and the
   spend split needs a Claude transcript, so it only applies to a Claude orchestrator.
@@ -88,6 +90,9 @@ Details that decide whether an agent is found:
 - **The branch is recorded for launched runs only.** `run_start` carries the branch checked out in the worktree at
   launch (`<phase>/<task>[-<model>]` when made by `swarm.py wt`), and nothing for a detached review worktree.
   Claude subagents run wherever the orchestrator put them, so only their transcript path is known.
+- **The orchestrator's actions are read only for a task of its own, and only with `[claude] session` set.**
+  While it is just orchestrating there is no card to put them on, so its lane shows only "Orchestrating" and
+  how recently its transcript changed. Two own tasks open at once show the same latest action.
 - **Own work is counted by time, not by content.** Every orchestrator message between a task's `working` and its
   next status counts as work, including a quick question it answers meanwhile. A task it forgets to close keeps
   counting, so close it with `review` or `merged`.

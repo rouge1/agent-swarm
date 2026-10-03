@@ -56,6 +56,9 @@ process is gone and its run was never closed, so `swarm.py recover` is due) and 
 for 10 minutes and not waiting on a background job), each with how long. It is logged once, as an `activity`
 event with a `flag`, and cleared the same way when output resumes.
 
+A Claude orchestrator that holds a task of its own gets the same two lines on that card: `activity` events for
+model `orchestrator`, read from its own transcript (`[claude] session` must be set).
+
 Until a Claude subagent's runs are logged with `swarm.py log-run`, its lane and spend rows show its tokens
 and cost from the transcripts with "not logged" in place of the run counts, rather than a misleading 0.
 

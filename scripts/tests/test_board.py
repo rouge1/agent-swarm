@@ -85,6 +85,10 @@ session = "sess1"
     def events(self, type_=None):
         return [e for e in swarm.load_events() if type_ is None or e["type"] == type_]
 
+    def age(self, log, seconds):
+        old = log.stat().st_mtime - seconds
+        os.utime(log, (old, old))
+
     def start_run(self, task, model, log_objs, extra=""):
         """A run `swarm.py run` started and hasn't finished: run_start event + its log so far."""
         swarm.LOGS.mkdir(parents=True, exist_ok=True)
@@ -204,10 +208,6 @@ class ScanTest(BoardTestBase):
         log = self.start_run("a", "ocw", [{"type": "tool_use", "part": {"type": "tool", "tool": "read", "state": {}}}])
         swarm.emit({"type": "run_end", "log": str(log), "exit": 0, "timed_out": False})
         self.assertEqual(swarm.scan_activity(), 0)
-
-    def age(self, log, seconds):
-        old = log.stat().st_mtime - seconds
-        os.utime(log, (old, old))
 
     def dead_pid(self):
         pid = 2 ** 22 + 12345
@@ -370,6 +370,68 @@ class OrchestratorWorkTest(BoardTestBase):
     def at(self, iso):
         from datetime import datetime
         return int(datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+
+    def own_task(self, status="working", task="skeleton"):
+        swarm.emit({"type": "task", "phase": "p1", "task": task, "model": "orchestrator", "status": status})
+
+    def orchestrator_transcript(self, content):
+        jl(self.sessions / "sess1.jsonl",
+           {"type": "user", "timestamp": "2026-09-27T10:00:00Z", "message": {"content": "go"}},
+           {"type": "assistant", "timestamp": "2026-09-27T10:05:00Z",
+            "message": {"stop_reason": "tool_use", "content": content}})
+
+    def test_an_own_task_is_read_from_the_orchestrators_transcript(self):
+        self.own_task()
+        self.orchestrator_transcript([{"type": "tool_use", "name": "Write",
+                                       "input": {"file_path": f"{self.repo}/CONTRACTS.md"}}])
+        (ag,) = swarm.in_flight()
+        self.assertEqual((ag["phase"], ag["task"], ag["model"], ag["runtime"]), ("p1", "skeleton", "orchestrator", "claude"))
+        self.assertEqual(ag["doing"], "Write · CONTRACTS.md")
+        self.assertEqual(swarm.scan_activity(), 1)
+        self.assertEqual(self.events("activity")[0]["model"], "orchestrator")
+        self.assertEqual(self.events("activity")[0]["doing"], "Write · CONTRACTS.md")
+
+    def test_the_orchestrator_is_never_reported_as_a_finished_run_to_log(self):
+        self.own_task()
+        # it has stopped to wait for the user: a final answer and no tool call
+        self.orchestrator_transcript([{"type": "text", "text": "Phase 0 skeleton is in; what next?"}])
+        (ag,) = swarm.in_flight()
+        self.assertNotIn("ended", ag)
+        self.assertNotIn("run_logged", ag)
+        self.assertNotIn("finished", run_cli("agents"))
+
+    def test_an_own_task_waiting_on_a_background_job_says_so(self):
+        self.own_task()
+        jl(self.sessions / "sess1.jsonl",
+           {"type": "assistant", "timestamp": "2026-09-27T10:01:00Z", "message": {"stop_reason": "tool_use", "content": [
+               {"type": "tool_use", "id": "toolu_1", "name": "Bash",
+                "input": {"command": "pytest", "description": "full suite", "run_in_background": True}}]}})
+        (ag,) = swarm.in_flight()
+        self.assertEqual((ag["waiting"], ag["doing"]), ("full suite", "waiting: full suite"))
+
+    def test_an_own_task_goes_quiet_like_any_other_agent(self):
+        self.own_task()
+        self.orchestrator_transcript([{"type": "tool_use", "name": "Read", "input": {}}])
+        self.age(self.sessions / "sess1.jsonl", swarm.QUIET_S + 30)
+        swarm.scan_activity()
+        self.assertEqual(self.events("activity")[-1]["flag"], "quiet")
+
+    def test_no_entry_without_an_open_own_task_or_a_known_session(self):
+        self.orchestrator_transcript([{"type": "tool_use", "name": "Read", "input": {}}])
+        self.assertEqual(swarm.in_flight(), [])  # orchestrating: no task, nothing to attach it to
+        self.own_task("review")
+        self.assertEqual(swarm.in_flight(), [])  # the task is done
+        self.own_task("working", task="other")
+        with unittest.mock.patch.object(swarm, "CLAUDE_SESSION", ""):
+            self.assertEqual(swarm.in_flight(), [])  # no single transcript to read
+        self.assertEqual(len(swarm.in_flight()), 1)
+
+    def test_two_own_tasks_open_at_once_each_get_the_latest_action(self):
+        self.own_task(task="skeleton")
+        self.own_task(task="contracts")
+        self.orchestrator_transcript([{"type": "tool_use", "name": "Edit", "input": {"file_path": "a.py"}}])
+        self.assertEqual(sorted((a["task"], a["doing"]) for a in swarm.in_flight()),
+                         [("contracts", "Edit · a.py"), ("skeleton", "Edit · a.py")])
 
     def test_windows_span_working_to_the_next_status(self):
         self.put(
