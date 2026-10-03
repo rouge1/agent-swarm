@@ -6,6 +6,70 @@ Verified against `~/.grok/docs/user-guide/14-headless-mode.md`, `15-agent-mode.m
 is a single non-interactive turn that prints and exits, which is what a
 worker run is.
 
+## Setting up a Grok worker
+
+Three pieces: a model entry, a sandbox profile, and a smoke run. Everything below was run end to end
+(Grok CLI 1.0.46, Ubuntu with `kernel.apparmor_restrict_unprivileged_userns = 1`).
+
+**1. The model entry** in `swarm.toml`. `driver = "grok"` is what routes it to the Grok CLI; the default is
+`opencode`. `id` is a Grok model id (`grok models` lists them, e.g. `grok-4.7`, `grok-4.7-build-fast`).
+
+```toml
+[[models]]
+key = "grokw"
+id = "grok-4.7-build-fast"
+name = "Grok 4.7 Build Fast"
+driver = "grok"
+
+[grok]
+bin = "grok"
+max_turns = 40
+reasoning_effort = "low"      # for bulk generation; the default effort can time out on big prompts
+sandbox = "swarm-worker"      # must exist in sandbox.toml, see step 2
+```
+
+**2. The sandbox profile** in `~/.grok/sandbox.toml` (or `.grok/sandbox.toml` in the project). `swarm.py` does
+not write it, and `swarm-worker` is not a built-in, so until you define it Grok refuses to start.
+
+```toml
+[profiles.swarm-worker]
+# strict: read CWD + system paths + ~/.grok; write CWD + ~/.grok/sessions + /tmp
+extends = "strict"
+# no network for commands the worker runs (Grok's own API traffic is unaffected)
+restrict_network = true
+# what the worker's tests need to read: the Python env, and the main repo's .git so git can
+# resolve the worktree (a worktree's .git is a file pointing into the main repo)
+read_only = [
+  "/path/to/python/env",
+  "/path/to/main/repo/.git",
+]
+```
+
+With no `deny` list this runs on Landlock alone, so it works on Ubuntu without a bubblewrap AppArmor profile
+(see "Ubuntu + bubblewrap + AppArmor" below if you add one).
+
+**3. Smoke run**, from a scratch repo with a worktree. Put `--config` after the subcommand (see "Under Claude
+Code" for why):
+
+```
+python3 scripts/swarm.py run p1 hello grokw --dir <worktree> --config <ops>/swarm.toml \
+  --prompt "Create hello.py that prints hello, run it with python3 to confirm, then stop."
+```
+
+A good result is `"outcome": "ok"`, a real `cost` (not `null`), and `hello.py` in the worktree. Then check
+the two things the setup exists for:
+
+- **Resume keeps context.** Re-run with `--session <sessionId from the first run>` and ask what file it
+  created. It answers from the earlier session.
+- **The sandbox actually confines it.** Ask the resumed session to `echo hi > $HOME/some-file` and to
+  `cat $HOME/.ssh/config`. Both should fail with `Permission denied` and leave no file behind. Pick targets
+  *outside* `/tmp`: `strict` grants write to `/tmp`, so a test whose ops dir or worktree sits under `/tmp`
+  will report a successful escape that the profile never prevented. That also means a real swarm's worktrees
+  and ops dir should not live under `/tmp`.
+
+`grok models` may print "You are not authenticated" while headless runs work fine; judge by the smoke run,
+not by that message.
+
 ## Launch command
 
 For `driver = "grok"`, `swarm.py run` builds:

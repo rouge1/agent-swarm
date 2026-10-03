@@ -31,7 +31,7 @@ After whichhf ships, the `opencode-swarm` skill used here becomes its own projec
 | Driver | Launch | Result / cost | Fix round |
 |---|---|---|---|
 | `opencode` | `opencode run …` (as today) | `opencode export <ses_…>` | as today |
-| `grok` | `grok --prompt-file <task.md> --cwd <worktree> --output-format json --always-approve --no-subagents --no-auto-update --max-turns 40 --sandbox <profile> < /dev/null`, env `GROK_MEMORY=0` | stdout JSON: `text`, `sessionId`, `stopReason` (`end_turn` / `max_turn_requests`), `usage`, `total_cost_usd` (missing = not reported); exit 0 / 1 / 130 / 143 | same command with `--resume <sessionId>` (not `--session-id`, which creates a new session); one process per session at a time |
+| `grok` | `grok -p <text> --cwd <worktree> --output-format streaming-json --always-approve --no-subagents --no-auto-update --max-turns 40 --sandbox <profile> < /dev/null` (`--prompt-file` instead of `-p` from 100 KB up), env `GROK_MEMORY=0` | stdout: one JSON event per line; the closing `end` event carries `sessionId`, `stopReason` (`end_turn` / `max_turn_requests`), `usage`, `total_cost_usd` (missing = not reported); exit 0 / 1 / 130 / 143 | same command with `--resume <sessionId>` (not `--session-id`, which creates a new session); one process per session at a time |
 | `claude` | `claude -p` headless, or Agent-tool subagents when Claude orchestrates | transcript tally (`swarm.py claude`) | resume / SendMessage |
 
 Grok reviewers: keep read tools only, e.g. `--tools "read_file,grep,list_dir" --disallowed-tools "search_replace,run_terminal_cmd,Agent"`.
