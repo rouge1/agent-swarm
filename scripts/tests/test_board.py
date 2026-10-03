@@ -14,6 +14,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -92,6 +93,7 @@ session = "sess1"
         swarm.emit({"type": "task", "phase": "p1", "task": task, "model": model, "status": "working"})
         swarm.emit({"type": "run_start", "phase": "p1", "task": task, "model": model,
                     "dir": str(self.wt / f"p1-{task}-{model}"), "pid": os.getpid(), "log": str(log)})
+        time.sleep(0.005)  # events carry millisecond times; keep what follows strictly after the run_start
         return log
 
 
@@ -203,6 +205,81 @@ class ScanTest(BoardTestBase):
         swarm.emit({"type": "run_end", "log": str(log), "exit": 0, "timed_out": False})
         self.assertEqual(swarm.scan_activity(), 0)
 
+    def age(self, log, seconds):
+        old = log.stat().st_mtime - seconds
+        os.utime(log, (old, old))
+
+    def dead_pid(self):
+        pid = 2 ** 22 + 12345
+        while swarm._pid_alive(pid):
+            pid += 1
+        return pid
+
+    def test_scan_flags_a_crashed_run_once_and_clears_it(self):
+        log = self.start_run("a", "grokw", [{"type": "tool_call", "toolName": "grep", "rawInput": {"pattern": "x"}}])
+        events = swarm.load_events()
+        start = next(e for e in events if e["type"] == "run_start")
+        start["pid"] = self.dead_pid()
+        swarm.EVENTS.write_text("".join(json.dumps(e) + "\n" for e in events))
+        self.assertEqual(swarm.scan_activity(), 1)  # the first sighting: its latest action
+        self.age(log, 10)
+        self.assertEqual(swarm.scan_activity(), 0)  # dead pid, but finalize() may still be closing the run
+        self.age(log, 120)
+        self.assertEqual(swarm.scan_activity(), 1)
+        flag = self.events("activity")[-1]
+        self.assertEqual(flag["flag"], "crashed")
+        self.assertAlmostEqual(flag["flag_since"], (log.stat().st_mtime) * 1000, delta=2000)
+        self.assertEqual(swarm.scan_activity(), 0)  # said once, not every pass
+        # the run is recovered and closed
+        swarm.emit({"type": "run_end", "log": str(log), "exit": 0, "timed_out": False})
+        self.assertEqual(swarm.scan_activity(), 0)
+
+    def test_scan_flags_a_quiet_run_and_clears_it_when_output_resumes(self):
+        log = self.start_run("a", "ocw", [{"type": "tool_use", "part": {"type": "tool", "tool": "bash",
+                                                                          "state": {"input": {"command": "make"}}}}])
+        self.assertEqual(swarm.scan_activity(), 1)
+        self.age(log, swarm.QUIET_S + 30)
+        self.assertEqual(swarm.scan_activity(), 1)
+        self.assertEqual(self.events("activity")[-1]["flag"], "quiet")
+        self.assertEqual(swarm.scan_activity(), 0)
+        os.utime(log)  # it printed again
+        self.assertEqual(swarm.scan_activity(), 1)
+        self.assertEqual(self.events("activity")[-1]["flag"], "")
+
+    def test_scan_does_not_carry_a_flag_over_to_the_next_run_of_a_task(self):
+        log = self.start_run("a", "ocw", [{"type": "tool_use", "part": {"type": "tool", "tool": "bash", "state": {}}}])
+        self.age(log, swarm.QUIET_S + 30)
+        swarm.scan_activity()
+        self.assertEqual(self.events("activity")[-1]["flag"], "quiet")
+        swarm.emit({"type": "run_end", "log": str(log), "exit": 1, "timed_out": True})
+        time.sleep(0.005)
+        # a later run of the same task is quiet too: that is a new fact and must be logged again
+        log2 = swarm.LOGS / "p1-a-ocw-1790000001000.jsonl"
+        jl(log2, {"type": "tool_use", "part": {"type": "tool", "tool": "bash", "state": {}}})
+        swarm.emit({"type": "run_start", "phase": "p1", "task": "a", "model": "ocw",
+                    "dir": str(self.wt / "p1-a-ocw"), "pid": os.getpid(), "log": str(log2)})
+        time.sleep(0.005)
+        self.age(log2, swarm.QUIET_S + 30)
+        swarm.scan_activity()
+        flags = [e["flag"] for e in self.events("activity") if "flag" in e]
+        self.assertEqual(flags, ["quiet", "quiet"])
+
+    def test_a_waiting_claude_subagent_is_not_flagged_quiet(self):
+        swarm.emit({"type": "task", "phase": "p1", "task": "b", "model": "sonnet", "status": "working"})
+        self.claude_subagent("[p1:b] Build b", [{"type": "tool_use", "name": "Edit", "input": {}}])
+        sub = self.sessions / "sess1" / "subagents" / "agent-1.jsonl"
+        self.age(sub, swarm.QUIET_S + 30)
+        swarm.scan_activity()
+        self.assertEqual(self.events("activity")[-1]["flag"], "quiet")
+        # the same agent holding for its own background job is waiting, not stuck
+        launch = {"type": "assistant", "timestamp": "2026-09-27T10:01:00Z", "message": {"stop_reason": "tool_use", "content": [
+            {"type": "tool_use", "id": "toolu_1", "name": "Bash",
+             "input": {"command": "pytest", "description": "smoke suite", "run_in_background": True}}]}}
+        jl(sub, {"type": "user", "timestamp": "2026-09-27T10:00:00Z", "message": {"content": "go"}}, launch)
+        self.age(sub, swarm.QUIET_S + 30)
+        swarm.scan_activity()
+        self.assertEqual(self.events("activity")[-1]["flag"], "")
+
     def claude_subagent(self, desc, content, stop="tool_use"):
         sub = self.sessions / "sess1" / "subagents"
         (sub / "agent-1.meta.json").write_text(json.dumps({"description": desc}))
@@ -258,6 +335,17 @@ class ScanTest(BoardTestBase):
         self.assertEqual(swarm.in_flight(), [])
 
 
+class WhereTest(BoardTestBase):
+    def test_in_flight_run_reports_its_worktree_and_branch(self):
+        self.start_run("a", "grokw", [{"type": "tool_call", "toolName": "grep", "rawInput": {}}])
+        start = next(e for e in swarm.load_events() if e["type"] == "run_start")
+        start["branch"] = "p1/a-grokw"
+        events = [e if e["type"] != "run_start" else start for e in swarm.load_events()]
+        swarm.EVENTS.write_text("".join(json.dumps(e) + "\n" for e in events))
+        ag = swarm.in_flight()[0]
+        self.assertEqual((ag["dir"], ag["branch"]), (start["dir"], "p1/a-grokw"))
+
+
 class ScribeCommandsTest(BoardTestBase):
     def test_agents_json_and_text(self):
         self.start_run("a", "grokw", [{"type": "tool_call", "toolName": "list_dir", "rawInput": {"path": "."}}])
@@ -282,14 +370,3 @@ class ScribeCommandsTest(BoardTestBase):
 
 if __name__ == "__main__":
     unittest.main()
-class WhereTest(BoardTestBase):
-    def test_in_flight_run_reports_its_worktree_and_branch(self):
-        self.start_run("a", "grokw", [{"type": "tool_call", "toolName": "grep", "rawInput": {}}])
-        start = next(e for e in swarm.load_events() if e["type"] == "run_start")
-        start["branch"] = "p1/a-grokw"
-        events = [e if e["type"] != "run_start" else start for e in swarm.load_events()]
-        swarm.EVENTS.write_text("".join(json.dumps(e) + "\n" for e in events))
-        ag = swarm.in_flight()[0]
-        self.assertEqual((ag["dir"], ag["branch"]), (start["dir"], "p1/a-grokw"))
-
-

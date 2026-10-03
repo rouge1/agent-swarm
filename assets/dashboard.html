@@ -206,6 +206,8 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .now .say { color: var(--ink); }
 .nl { color: var(--muted); font-style: italic; white-space: nowrap; cursor: help; }
 .now .act { color: var(--muted); font-family: var(--mono); font-size: 10.5px; overflow-wrap: anywhere; }
+.now .flag { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--warn); }
+.now .flag.crashed { color: var(--bug); }
 .card.dropped { opacity: .6; }
 .card.failed { border-color: var(--bug); }
 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 7px 1px 5px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); color: var(--c); background: color-mix(in srgb, var(--c) 10%, transparent); white-space: nowrap; }
@@ -412,7 +414,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
           s.phases[e.phase] = { status: e.status, t: prev?.t ?? e.t, end: e.status === "done" || e.status === "deferred" ? e.t : undefined };
           if (e.status === "active") s.cur = e.phase; break;
         }
-        case "task": { const t = task(); if (e.status !== t.status) { t.since = e.t; t.doing = t.say = null; } t.status = e.status; if (e.title) t.title = e.title; if ("note" in e) t.note = e.note; break; }
+        case "task": { const t = task(); if (e.status !== t.status) { t.since = e.t; t.doing = t.say = t.flag = null; } t.status = e.status; if (e.title) t.title = e.title; if ("note" in e) t.note = e.note; break; }
         case "run": {
           const t = task(); const rerun = t.runs > 0 ? 1 : 0, bad = runFailed(e) ? 1 : 0;
           t.runs++; t.reruns += rerun; t.failed += bad; t.fixes += e.kind === "fix"; t.cost += e.cost || 0; t.wall += e.wall_s || 0;
@@ -424,7 +426,9 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
         case "score": task().score = e.score; s.scores.push(e); break;
         case "crew": s.crew[e.who] = e; break;
         case "activity": { // the scan's latest action and the scribe's summary; shown on cards and lanes, not in the feed
-          const t = task(); if (e.doing) t.doing = { text: e.doing, t: e.t }; if (e.summary) t.say = { text: e.summary, t: e.t }; continue;
+          const t = task(); if (e.doing) t.doing = { text: e.doing, t: e.t }; if (e.summary) t.say = { text: e.summary, t: e.t };
+          if ("flag" in e) t.flag = e.flag ? { state: e.flag, since: e.flag_since || e.t } : null; // crashed / quiet, or cleared
+          continue;
         }
         case "claude": s.claude[`${e.phase}|${e.role}|${e.model}`] = e; continue; // tallies stay out of the feed
         case "run_start": case "run_end": continue; // ops bookkeeping only (see `swarm.py health`)
@@ -587,9 +591,10 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   // outside it and cards leaving slide out and fade before they are removed.
   // a working agent's summary and latest action, with how long the action has been going when it's a while
   function nowHtml(t, T) {
-    if (!["working", "fixing"].includes(t.status) || !(t.doing || t.say)) return "";
+    if (!["working", "fixing"].includes(t.status) || !(t.doing || t.say || t.flag)) return "";
     const age = t.doing ? (T - t.doing.t) / 1000 : 0;
-    return `<div class="now">${t.say ? `<span class="say">${esc(t.say.text)}</span>` : ""}${t.doing ? `<span class="act">now: ${esc(t.doing.text)}${age >= 120 ? ` · ${fmtS(age)}` : ""}</span>` : ""}</div>`;
+    const flag = t.flag ? `<span class="flag ${t.flag.state}">${t.flag.state === "crashed" ? "crashed · run lost" : "quiet"} for ${fmtS(Math.max(0, (T - t.flag.since) / 1000))}</span>` : "";
+    return `<div class="now">${flag}${t.say ? `<span class="say">${esc(t.say.text)}</span>` : ""}${t.doing ? `<span class="act">now: ${esc(t.doing.text)}${age >= 120 ? ` · ${fmtS(age)}` : ""}</span>` : ""}</div>`;
   }
 
   function renderWheel(s, phases, view, curId, T) {

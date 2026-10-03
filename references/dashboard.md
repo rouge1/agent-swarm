@@ -47,6 +47,11 @@ when it changes (a Claude subagent holding for its own background job, such as a
 is not counted as finished); the scribe adds the summary with `swarm.py activity`. Activity never appears in the feed,
 and both lines clear when the task changes status.
 
+The same scan calls out a worker that needs a look, above those two lines: **crashed · run lost** in red (its
+process is gone and its run was never closed, so `swarm.py recover` is due) and **quiet** in amber (no output
+for 10 minutes and not waiting on a background job), each with how long. It is logged once, as an `activity`
+event with a `flag`, and cleared the same way when output resumes.
+
 Until a Claude subagent's runs are logged with `swarm.py log-run`, its lane and spend rows show its tokens
 and cost from the transcripts with "not logged" in place of the run counts, rather than a misleading 0.
 

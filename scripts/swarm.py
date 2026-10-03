@@ -676,7 +676,7 @@ def _pid_alive(pid: int) -> bool:
 
 def cmd_health(a):
     """List every run() that has started but not finished: model, task, dir, pid, seconds since its log
-    last grew. A run idle for more than 600s is flagged HUNG. Always exits 0 (this is a status report)."""
+    last grew. A run idle for more than QUIET_S (600 s) is flagged HUNG. Always exits 0 (this is a status report)."""
     starts, ended = {}, set()
     for e in load_events():
         if e["type"] == "run_start":
@@ -695,7 +695,7 @@ def cmd_health(a):
         idle = time.time() - log.stat().st_mtime if log.exists() else float("inf")
         idle_s = "?" if idle == float("inf") else f"{int(idle)}s"
         flag = " CRASHED (bookkeeping lost; run `swarm.py recover`)" if pid and not alive else \
-            " HUNG" if idle > 600 else ""
+            " HUNG" if idle > QUIET_S else ""
         pid_s = str(pid) if alive else f"{pid}(dead)" if pid else "-"
         print(f"{e['model']:<10}{e['task']:<20}{pid_s:>8}{idle_s:>9}{flag}  {e['dir']}")
 
@@ -842,6 +842,8 @@ def cmd_export(a):
 
 TAG = re.compile(r"^\[(?P<phase>[\w.-]+):(?P<task>[\w.-]+)(?::(?P<model>[\w.-]+))?\]")
 ACTIVE = ("working", "fixing")
+QUIET_S = 600       # an agent whose log or transcript hasn't grown for this long is quiet (or HUNG)
+CRASH_GRACE_S = 60  # a dead pid is "crashed" only after this long: finalize() may still be closing the run
 WRITING = "writing its answer"
 
 
@@ -1051,19 +1053,44 @@ def in_flight(events: list[dict] | None = None) -> list[dict]:
     return agents
 
 
+def _flag(ag: dict) -> str:
+    """What the board should call out about an in-flight agent: "crashed" (its process is gone and its run
+    was never closed) or "quiet" (its log or transcript hasn't grown for QUIET_S and it isn't waiting on a
+    background job); otherwise empty."""
+    if ag.get("ended") or ag.get("waiting"):
+        return ""
+    if ag.get("pid") and not ag.get("alive") and ag["idle_s"] >= CRASH_GRACE_S:
+        return "crashed"
+    return "quiet" if ag["idle_s"] > QUIET_S else ""
+
+
 def scan_activity(events: list[dict] | None = None) -> int:
-    """Log an `activity` event for every in-flight agent whose latest action changed; return how many."""
+    """Log an `activity` event for every in-flight agent whose latest action changed, or whose flag
+    (crashed / quiet / cleared) changed; return how many."""
     events = load_events() if events is None else events
-    last = {}
+    last, flags = {}, {}
     for e in events:
-        if e["type"] == "activity" and e.get("doing"):
-            last[(e["phase"], e["task"], e.get("model"))] = e["doing"]
+        if e["type"] != "activity":
+            continue
+        key = (e["phase"], e["task"], e.get("model"))
+        if e.get("doing"):
+            last[key] = e["doing"]
+        if "flag" in e:
+            flags[key] = (e["t"], e["flag"])
     changed = 0
     for ag in in_flight(events):
         key = (ag["phase"], ag["task"], ag["model"])
         if ag["doing"] and ag["doing"] != last.get(key):
             emit({"type": "activity", "phase": ag["phase"], "task": ag["task"], "model": ag["model"],
                   "runtime": ag["runtime"], "doing": ag["doing"]})
+            changed += 1
+        # a flag logged before this run began belongs to an earlier run of the same task
+        t, shown = flags.get(key, (0, ""))
+        shown = shown if t > (ag.get("started") or 0) else ""
+        flag = _flag(ag)
+        if flag != shown:
+            emit({"type": "activity", "phase": ag["phase"], "task": ag["task"], "model": ag["model"],
+                  "runtime": ag["runtime"], "flag": flag, "flag_since": now_ms() - ag["idle_s"] * 1000})
             changed += 1
     return changed
 
@@ -1089,7 +1116,7 @@ def cmd_agents(a):
             flags.append("CRASHED")
         if ag.get("waiting"):
             flags.append(f"waiting on a background job {ag['idle_s'] // 60}m")
-        elif ag["idle_s"] > 600:
+        elif ag["idle_s"] > QUIET_S:
             flags.append(f"quiet {ag['idle_s'] // 60}m")
         if ag.get("ended"):
             flags.append("finished" + ("" if ag.get("run_logged") else ", run not logged"))
