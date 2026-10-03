@@ -26,7 +26,7 @@ After whichhf ships, the `opencode-swarm` skill used here becomes its own projec
 ## Design notes from this build
 
 ### Workers: one driver per CLI
-`swarm.py run` only knows OpenCode today (it execs `opencode run`, then prices the run with `opencode export`). Add a driver per CLI behind the same `run` command, so the ledger, watchdog, dashboard and cost log stay the same:
+`swarm.py run` has one driver per CLI behind the same command (`driver` on each `[[models]]` entry; default `opencode`), so the ledger, watchdog, dashboard and cost log stay the same. OpenCode is run with `opencode run` and priced with `opencode export`; Grok is below:
 
 | Driver | Launch | Result / cost | Fix round |
 |---|---|---|---|
@@ -34,10 +34,15 @@ After whichhf ships, the `opencode-swarm` skill used here becomes its own projec
 | `grok` | `grok -p <text> --cwd <worktree> --output-format streaming-json --always-approve --no-subagents --no-auto-update --max-turns 40 --sandbox <profile> < /dev/null` (`--prompt-file` instead of `-p` from 100 KB up), env `GROK_MEMORY=0` | stdout: one JSON event per line; the closing `end` event carries `sessionId`, `stopReason` (`end_turn` / `max_turn_requests`), `usage`, `total_cost_usd` (missing = not reported); exit 0 / 1 / 130 / 143 | same command with `--resume <sessionId>` (not `--session-id`, which creates a new session); one process per session at a time |
 | `claude` | `claude -p` headless, or Agent-tool subagents when Claude orchestrates | transcript tally (`swarm.py claude`) | resume / SendMessage |
 
-Grok reviewers: keep read tools only, e.g. `--tools "read_file,grep,list_dir" --disallowed-tools "search_replace,run_terminal_cmd,Agent"`.
+Grok reviewers: keep read tools only, e.g. `--tools "read_file,grep,list_dir" --disallowed-tools "search_replace,run_terminal_cmd,Agent"` (`--kind review`).
+
+Grok research: `--kind research` is the reviewer's read-only set plus `web_search,web_fetch` and `GROK_WEB_FETCH=1`: it can search and read the web but cannot edit, run commands or spawn subagents. Read-only is enforced for Grok only; on an OpenCode model the kind is just a label.
+
+Grok's `end` event has no file count (OpenCode's export does), so `files_changed` is the worktree's changed files after the run compared with a snapshot taken before it. A fix round doesn't re-count an earlier round's uncommitted work, and a committed change still counts. The field is left out when git can't read the directory.
 
 ### Safety
 - `--cwd` is not a sandbox. Use the CLI’s own kernel sandbox where it has one (Grok: `--sandbox` with a custom profile extending `strict`, `restrict_network = true`, read-only grants for the Python env and the repo’s `.git`), plus the worktree path check in `swarm.py`, plus `git status` on main after every run.
+- Web access needs no sandbox change. Grok's `web_search` and `web_fetch` run inside the Grok process, so `restrict_network = true` (which blocks only the commands a worker runs, e.g. `curl`) leaves them working. Don't loosen the profile to give a worker the web; use a research run for lookups with nothing to write. Page content is untrusted text.
 - Under Claude Code, `grok --always-approve` is blocked by the auto-mode check until the user adds a permission rule. Allow a single wrapper script, not `grok` in general.
 
 ### Board
@@ -52,5 +57,6 @@ Grok reviewers: keep read tools only, e.g. `--tools "read_file,grep,list_dir" --
 - An editable install points at the main checkout, so in a worktree always run `python -m pytest` from the worktree root.
 - With `--json-schema` plus `--permission-mode plan`, Grok may answer without reading the files it was told to read: inline the source material.
 - Large prompts with default reasoning effort made Grok write the whole answer inside its reasoning and time out (15 min on `grok-4.7`, 10 min on `grok-4.7-build-fast`). Use `--reasoning-effort low` for bulk-generation tasks, and stream (`--output-format streaming-json`) to diagnose.
+- A headless Grok worker can't ask for access. A sandbox denial or a removed tool comes back to the model as a tool error (`Permission denied`, no such tool) and the model carries on; when asked to report, it said so plainly. `swarm.py` marks a run failed only on a non-zero exit, a timeout or `--max-turns`, so a worker that was blocked and finished cleanly is logged `ok`. Judge by the answer text, `files_changed` and the tests, not the outcome alone. Not yet tested: what a worker does when a denial surprises it (stops, works around it, or hands back partial work unmentioned).
 - After a database version conflict, a plain resync prints nothing because the hash cache assumes the failed write landed: resync with `--all`.
 - Tests should assert behaviour (rejected families), not curator-owned strings (labels), or parallel workers break each other on merge.
