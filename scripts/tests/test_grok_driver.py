@@ -227,6 +227,22 @@ class TestArgvShape(GrokDriverTestBase):
         self.assertIn("--tools", argv)
         self.assertEqual(argv[argv.index("--tools") + 1], "read_file,grep,list_dir")
 
+    def test_research_kind_is_read_only_plus_the_web(self):
+        self.load()
+        self.run_grok(kind="research")
+        argv = self.captured_argv()
+        self.assertEqual(argv[argv.index("--disallowed-tools") + 1],
+                          "search_replace,run_terminal_cmd,Agent")
+        self.assertEqual(argv[argv.index("--tools") + 1],
+                          "read_file,grep,list_dir,web_search,web_fetch")
+        self.assertEqual(self.captured_env()["GROK_WEB_FETCH"], "1")  # documented as off by default
+
+    def test_only_research_touches_web_fetch(self):
+        self.load()
+        for kind in ("build", "review"):
+            self.run_grok(kind=kind)
+            self.assertEqual(self.captured_env()["GROK_WEB_FETCH"], os.environ.get("GROK_WEB_FETCH"))
+
     def test_env_vars_on_the_grok_popen(self):
         self.load()
         self.run_grok()

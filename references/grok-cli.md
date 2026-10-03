@@ -70,6 +70,47 @@ the two things the setup exists for:
 `grok models` may print "You are not authenticated" while headless runs work fine; judge by the smoke run,
 not by that message.
 
+## Web access (search and research)
+
+Grok's web tools run **inside the grok process**, so the sandbox's `restrict_network = true` does not touch
+them: that setting only blocks network from the commands a worker runs (`bash`, scripts). Checked with a
+real run under the `swarm-worker` profile:
+
+| Tool | Under `swarm-worker` |
+|---|---|
+| `web_search` | works |
+| `web_fetch` | works (Grok's config reference lists it off by default, yet it ran here without the variable; research runs set `GROK_WEB_FETCH=1` so they don't depend on that) |
+| `curl` / `wget` in `bash` | blocked (`Could not resolve host`), on purpose |
+
+So a build or fix worker can already look things up, with no change to the profile. **Do not widen the
+profile to get web access** (dropping `restrict_network`, or `workspace`): that hands a worker that is
+reading untrusted web pages an open network from its shell.
+
+For research with nothing to write, use a **research run**:
+
+```
+swarm.py run <phase> <task> grokw --dir <worktree> --kind research --text-out data/research/<f>.md \
+  --prompt-file prompts/<f>.md --config <ops>/swarm.toml
+```
+
+`--kind research` is a review run that may also search and read the web: it can read and grep the repo plus
+`web_search` and `web_fetch`, and has no edit tool, no shell and no subagents. Verified: it searched and
+fetched, and a request to create a file and one to run `echo` both came back unavailable. The answer lands in
+`--text-out`. Write the prompt to ask for sources (URLs) with each claim, and treat the answer as input to
+check, not as fact. Read-only is enforced only for Grok; `--kind research` on an OpenCode model is just a label.
+
+Page content is untrusted text going to a model that holds your repo. A research run has nothing to write
+with, which is why the web goes there. To narrow `web_search` further, set a domain allowlist or blocklist
+in `~/.grok/config.toml` (it applies to every Grok run, and is read at session start):
+
+```toml
+[toolset.web_search]
+allowed_domains = ["docs.python.org", "peps.python.org"]   # max 5; or excluded_domains, not both
+```
+
+`--disable-web-search` removes both tools if you ever want a worker with no web at all; `swarm.py` does not
+pass it today.
+
 ## Launch command
 
 For `driver = "grok"`, `swarm.py run` builds:
@@ -81,6 +122,7 @@ For `driver = "grok"`, `swarm.py run` builds:
   [--reasoning-effort <grok.reasoning_effort>] \
   [--resume <session>] \
   [--disallowed-tools search_replace,run_terminal_cmd,Agent --tools read_file,grep,list_dir]  # kind == review only
+  [--disallowed-tools search_replace,run_terminal_cmd,Agent --tools read_file,grep,list_dir,web_search,web_fetch]  # kind == research only
   [--sandbox <grok.sandbox>]
 ```
 
@@ -139,7 +181,8 @@ Notes:
   memory -- a worker run shouldn't read or write memory from unrelated
   sessions) and `GROK_DISABLE_AUTOUPDATER=1` (belt-and-suspenders alongside
   `--no-auto-update`, since the SDKs already inject this for non-leader
-  agents they spawn).
+  agents they spawn). A `research` run also gets `GROK_WEB_FETCH=1`, because
+  Grok's config reference lists `web_fetch` as off by default.
 
 ## Fields read back
 

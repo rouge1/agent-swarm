@@ -361,6 +361,9 @@ def _grok_argv(a, model: dict, dir_path: Path, kind: str) -> tuple[list[str], Pa
     if kind == "review":
         cmd += ["--disallowed-tools", "search_replace,run_terminal_cmd,Agent",
                 "--tools", "read_file,grep,list_dir"]
+    elif kind == "research":  # a reviewer that may also search and read the web, still unable to edit or run anything
+        cmd += ["--disallowed-tools", "search_replace,run_terminal_cmd,Agent",
+                "--tools", "read_file,grep,list_dir,web_search,web_fetch"]
     if GROK_SANDBOX:
         cmd += ["--sandbox", GROK_SANDBOX]
     return cmd, prompt_tmp
@@ -388,6 +391,8 @@ def cmd_run(a):
         # GROK_MEMORY=0 keeps a worker run from reading/writing cross-session memory;
         # GROK_DISABLE_AUTOUPDATER belt-and-suspenders alongside --no-auto-update
         env_extra = {"GROK_MEMORY": "0", "GROK_DISABLE_AUTOUPDATER": "1"}
+        if kind == "research":
+            env_extra["GROK_WEB_FETCH"] = "1"  # the config reference lists web_fetch as off by default; research needs it
         # Grok reports no file count (OpenCode does), so finalize() diffs the worktree against this
         base = (_git_out(dir_path, "rev-parse", "HEAD") or "").strip()
         files = _worktree_files(dir_path, base) if base else None
@@ -1378,7 +1383,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--stall-active", type=int, default=WATCHDOG["stall_active"],
                     help="kill if a started run goes quiet this long")
     r.add_argument("--text-out", help="save the worker's final text answer to this file")
-    r.add_argument("--kind", help="override run kind (e.g. review)")
+    r.add_argument("--kind", help="override run kind (e.g. review; research = a read-only Grok run that may use the web)")
     r.set_defaults(fn=cmd_run)
 
     s = sub.add_parser("recover"); s.add_argument("phase"); s.add_argument("task")

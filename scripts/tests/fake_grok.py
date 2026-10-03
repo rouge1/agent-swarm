@@ -37,6 +37,7 @@ def main():
             "env": {
                 "GROK_MEMORY": os.environ.get("GROK_MEMORY"),
                 "GROK_DISABLE_AUTOUPDATER": os.environ.get("GROK_DISABLE_AUTOUPDATER"),
+                "GROK_WEB_FETCH": os.environ.get("GROK_WEB_FETCH"),
             },
         }
         # if a --prompt-file was passed, read it *now* (before it can be cleaned up by the
