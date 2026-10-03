@@ -13,6 +13,9 @@ Behavior switches on $FAKE_GROK_MODE:
   missing_cost         -- like normal but the `end` event omits total_cost_usd entirely
   max_turn_requests    -- `end` event reports stopReason "max_turn_requests"
   sleep_forever        -- prints one line then sleeps, for the watchdog stall/timeout test
+
+$FAKE_GROK_WRITE (JSON object, path -> text, or null to delete) makes the stub edit files under its
+working directory first, the way a worker edits its worktree.
 """
 import json
 import os
@@ -48,6 +51,14 @@ def main():
                 record["prompt_file_content"] = f"<error reading {pf}: {e}>"
         with open(cap, "w") as f:
             json.dump(record, f)
+
+    for name, text in json.loads(os.environ.get("FAKE_GROK_WRITE", "{}")).items():
+        if text is None:
+            os.remove(name)
+        else:
+            os.makedirs(os.path.dirname(name) or ".", exist_ok=True)
+            with open(name, "w") as f:
+                f.write(text)
 
     mode = os.environ.get("FAKE_GROK_MODE", "normal")
 

@@ -316,6 +316,44 @@ class TestFinalize(GrokDriverTestBase):
         task_ev = self.last_task_event()
         self.assertEqual(task_ev["status"], "review")
 
+    def test_files_changed_counts_what_the_run_wrote(self):
+        self.load()
+        edits = {"README.md": "changed\n", "src/new.py": "x = 1\n", "src/other.py": "y = 2\n"}
+        self.run_grok(extra_env={"FAKE_GROK_WRITE": json.dumps(edits)})
+        self.assertEqual(self.last_ledger()["files_changed"], 3)
+
+    def test_files_changed_counts_a_deletion(self):
+        self.load()
+        self.run_grok(extra_env={"FAKE_GROK_WRITE": json.dumps({"README.md": None})})
+        self.assertEqual(self.last_ledger()["files_changed"], 1)
+
+    def test_files_changed_ignores_what_an_earlier_run_left_behind(self):
+        self.load()
+        (self.wt / "earlier.py").write_text("from the first round\n")
+        (self.wt / "README.md").write_text("edited by the first round\n")
+        self.run_grok(session="ses_fake0000",
+                      extra_env={"FAKE_GROK_WRITE": json.dumps({"fix.py": "z = 3\n"})})
+        self.assertEqual(self.last_ledger()["files_changed"], 1)
+
+    def test_files_changed_counts_a_fix_that_rewrites_an_earlier_file(self):
+        self.load()
+        (self.wt / "earlier.py").write_text("from the first round\n")
+        self.run_grok(session="ses_fake0000",
+                      extra_env={"FAKE_GROK_WRITE": json.dumps({"earlier.py": "rewritten\n"})})
+        self.assertEqual(self.last_ledger()["files_changed"], 1)
+
+    def test_files_changed_counts_files_the_worker_committed(self):
+        base = swarm._git_out(self.wt, "rev-parse", "HEAD").strip()
+        before = swarm._worktree_files(self.wt, base)
+        (self.wt / "committed.py").write_text("a = 1\n")
+        _git(["add", "-A"], self.wt)
+        _git(["-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-q", "-m", "w"], self.wt)
+        after = swarm._worktree_files(self.wt, base)
+        self.assertEqual(swarm._files_changed(before, after), 1)
+
+    def test_files_changed_left_out_when_git_cannot_read_the_dir(self):
+        self.assertIsNone(swarm._worktree_files(self.tmp, "HEAD"))
+
     def test_cost_unknown_when_total_cost_usd_missing(self):
         self.load()
         self.run_grok(mode="missing_cost")

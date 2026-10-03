@@ -313,6 +313,42 @@ def _grok_prompt_args(a) -> tuple[list[str], Path | None]:
     return ["--prompt-file", str(tmp)], tmp
 
 
+def _git_out(path: Path, *args: str) -> str | None:
+    """stdout of `git -C path ...`, or None when git fails (not a repo, git missing)."""
+    try:
+        r = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True)
+    except OSError:
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def _worktree_files(path: Path, base: str) -> dict[str, str | None] | None:
+    """Every file in the worktree that differs from commit `base` -- tracked edits, deletions (None)
+    and untracked files -- mapped to a hash of its content. None when git can't read the directory."""
+    changed = _git_out(path, "diff", "--name-only", "--relative", "-z", base)
+    untracked = _git_out(path, "ls-files", "--others", "--exclude-standard", "-z")
+    if changed is None or untracked is None:
+        return None
+    files = {}
+    for name in filter(None, (changed + untracked).split("\0")):
+        f = path / name
+        if f.is_symlink():
+            files[name] = hashlib.sha1(os.readlink(f).encode()).hexdigest()
+        elif f.is_file():
+            files[name] = hashlib.sha1(f.read_bytes()).hexdigest()
+        else:
+            files[name] = None
+    return files
+
+
+def _files_changed(before: dict, after: dict) -> int:
+    """Files this run touched: the two snapshots disagree about them. Comparing snapshots rather than
+    counting `git status` keeps a fix round from re-counting what an earlier run left uncommitted, and
+    a worker that commits its work is still counted."""
+    gone = object()
+    return sum(before.get(n, gone) != after.get(n, gone) for n in before.keys() | after.keys())
+
+
 def _grok_argv(a, model: dict, dir_path: Path, kind: str) -> tuple[list[str], Path | None]:
     prompt_args, prompt_tmp = _grok_prompt_args(a)
     cmd = [GROK_BIN, *prompt_args, "--cwd", str(dir_path),
@@ -352,6 +388,10 @@ def cmd_run(a):
         # GROK_MEMORY=0 keeps a worker run from reading/writing cross-session memory;
         # GROK_DISABLE_AUTOUPDATER belt-and-suspenders alongside --no-auto-update
         env_extra = {"GROK_MEMORY": "0", "GROK_DISABLE_AUTOUPDATER": "1"}
+        # Grok reports no file count (OpenCode does), so finalize() diffs the worktree against this
+        base = (_git_out(dir_path, "rev-parse", "HEAD") or "").strip()
+        files = _worktree_files(dir_path, base) if base else None
+        a._files_before = (base, files) if files is not None else None
     else:
         prompt = Path(a.prompt_file).read_text() if a.prompt_file else a.prompt
         cmd = [OPENCODE_BIN, "run", "--format", "json", "-m", model["id"], "--dir", str(dir_path),
@@ -437,7 +477,11 @@ def finalize(a, kind, start, wall, code, timed_out, log):
         u = gl["usage"]
         metrics = {"cost": cost, "tokens_in": u["input_tokens"], "tokens_out": u["output_tokens"],
                    "tokens_reasoning": u["reasoning_tokens"], "cache_read": u["cache_read_input_tokens"],
-                   "model_s": 0.0, "messages": gl["num_turns"], "files_changed": 0}
+                   "model_s": 0.0, "messages": gl["num_turns"]}
+        before = getattr(a, "_files_before", None)
+        after = _worktree_files(_resolve_dir(a.dir), before[0]) if before else None
+        if after is not None:  # left out, like a missing OpenCode session, when git couldn't be read
+            metrics["files_changed"] = _files_changed(before[1], after)
         if cost is None:
             metrics["cost_unknown"] = True  # never silently 0 -- the server just didn't report one
         hit_max_turns = gl["stopReason"] == "max_turn_requests"
