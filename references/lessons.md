@@ -112,7 +112,21 @@ implementation (6,000 and 1,500 cases): the visible tests alone hid real bugs.
   `*` and one has a step (`0 0 */8 * */2`), it restricts to the stepped field instead of matching every day.
 - **Opus 5.5** was correct but about 3x Sol's cost: keep it for planning, not generation.
 - Flash is still the cheapest. Its semver miss was one narrow feature, so it suits tasks with a tight test net.
-- Caveats: two small, well-specified tasks and one run each. Reviewing, test-writing and multi-file work are untested.
+- Caveats: two small, well-specified tasks and one run each. Test-writing and multi-file work are untested.
+
+**Code review** (one run each): a branch with 9 seeded bugs (4 high, 3 medium, 2 low) that the visible tests pass, plus
+2 harmless refactors as decoys. Reviewers read the diff against a spec and could run probes.
+
+| Reviewer | Seeded bugs found | False alarms on decoys | Cost | Wall time |
+|---|---|---|---|---|
+| Claude Sonnet 5.5 | 9 of 9 | 0 | $0.07 | 22 s |
+| GPT-6.1 Sol | 9 of 9 | 0 | $0.06 | 48 s |
+| Muse Spark 1.3 Contributor (free) | 9 of 9 | 0 | $0 | 30 s |
+
+All three also flagged real extras (`refund` on an unknown sku raises `KeyError`; Sol found that `reserve` raises
+`KeyError` for an unknown sku with qty 0, a latent bug the seeded set missed). Sonnet marked nearly everything `[high]`,
+so don't trust severity labels across models. At this size the review task can't separate them: use the free model
+for routine review (public code only) and keep a second reviewer from a different family for consensus.
 
 ## The cheapest way to get quality work
 
