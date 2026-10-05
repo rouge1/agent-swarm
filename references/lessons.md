@@ -86,6 +86,34 @@ templates are the generalized version of that project's ops tooling.
   - Luna was careful and good at tests and reviews.
   - Muse was slowest and lost every bake-off, but was a sharp reviewer.
 
+### Value bake-offs (2026-10): which models to put in the roster
+
+Two one-shot implementation tasks, each from a contract plus acceptance tests: a semver parser/range matcher (101
+tests) and a cron parser with next-fire time (43 tests). One run per model per task, at each model's default
+effort. Every model passed the visible tests, so each result was also fuzzed against a private reference
+implementation (6,000 and 1,500 cases): the visible tests alone hid real bugs.
+
+| Model | Semver | Cron | Cost per task | Wall time |
+|---|---|---|---|---|
+| GPT-6.1 Sol | clean | clean | $0.10 | about 80 s |
+| Muse Spark 1.3 Contributor (free) | clean | clean | $0 | 130-170 s |
+| Claude Sonnet 5.5 (via OpenRouter) | clean | 1 narrow bug | $0.15 | about 40 s |
+| Claude Opus 5.5 (via OpenRouter) | clean | clean | $0.30-0.35 | 50-75 s |
+| DeepSeek V4.1 Flash | hyphen ranges mixed with comparators rejected | clean | $0.05 | 76-300 s |
+| Muse Spark 1.3 (paid) | same hyphen-range bug | clean | $0.60 | about 11 min |
+
+- **Sol is the best value** and the default pick for a worker. Its `max` reasoning variant cost 2.4x as much and
+  took 4x as long on semver for the same result.
+- **Free Muse** matched Sol on both tasks at no cost, but **never give it sensitive data** (credentials, personal
+  data, private or client code): the free tier may train on what it sees.
+- **Paid Muse** is the worst value: about 6x Sol's cost and 8x its time. Muse at `xhigh` spent its whole output budget
+  reasoning (`reason: length`) and wrote no code.
+- **Sonnet 5.5** is the cheapest paid model that was clean on semver. Its cron bug: when both day fields start with
+  `*` and one has a step (`0 0 */8 * */2`), it restricts to the stepped field instead of matching every day.
+- **Opus 5.5** was correct but about 3x Sol's cost: keep it for planning, not generation.
+- Flash is still the cheapest. Its semver miss was one narrow feature, so it suits tasks with a tight test net.
+- Caveats: two small, well-specified tasks and one run each. Reviewing, test-writing and multi-file work are untested.
+
 ## The cheapest way to get quality work
 
 1. **Put all generation on cheap models:** code, tests, reviews, review consensus and triage. At 1–3¢ a run you can
