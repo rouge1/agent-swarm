@@ -141,7 +141,8 @@ agent-swarm/
 
 1. **Planner:** write `specs/<phase>.md` from `templates/spec.md`. List the tasks, file ownership (one owner per
    file), the acceptance targets as numbers, the gates (pass/fail thresholds, the bake-off rubric, the winner rule),
-   and which tasks get a bake-off. Keep it short and exact: every vague line costs a review round. The manager commits the gates before any run (runbook step 0).
+   and which tasks get a bake-off. Keep it short and exact: every vague line costs a review round. The manager commits the gates before any run (runbook step 0). With `[project] require_gates = true`, `swarm.py run`
+   refuses a phase until its spec has a Gates section and is committed on main.
 2. **Planner:** launch a phase manager with `templates/prompts/manager-launch.md`, filled in (its Merge, Advisor and
    Sensitive lines say what the manager may do). Under Claude Code, start the `swarm-manager` agent; under OpenCode,
    run it with `--agent swarm-manager`. It reads `references/runbook.md` and runs the whole phase.

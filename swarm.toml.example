@@ -50,6 +50,11 @@ lint_cmd = "ruff check ."
 # which read the code outside `run` (the scribe sees output snippets on the board). Keep them off sensitive repos unless the planner accepts that those models see the code.
 sensitive = false
 
+# Set true to make `swarm.py run` refuse any phase whose spec has no Gates section or whose spec is not
+# committed on main in <records_dir>/specs/ (the pre-registration rule, runbook step 0). Off by default.
+require_gates = false
+
+
 # Optional label shown on the dashboard as the orchestrating agent (swarm.py reads it for board metadata).
 # orchestrator = ""
 

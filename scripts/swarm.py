@@ -50,6 +50,7 @@ GROK_REASONING_EFFORT = None
 GROK_SANDBOX = "swarm-worker"
 GROK_ALLOW_UNSANDBOXED = False
 SENSITIVE = False
+REQUIRE_GATES = False
 SESSION_DIR = Path.home() / ".claude" / "projects"
 CLAUDE_SESSION = ""
 CLAUDE_PRICES: dict = {}
@@ -120,7 +121,7 @@ def find_config(explicit: str | None) -> Path:
 def load_config(path: Path) -> None:
     global CFG, CONFIG_PATH, OPS, DATA, OUT, LOGS, EVENTS, LEDGER, MODELS, PHASES, WATCHDOG
     global OPENCODE_BIN, OPENCODE_AGENT, SESSION_DIR, CLAUDE_SESSION, CLAUDE_PRICES, CLAUDE_NAMES, DASHBOARD_URL
-    global GROK_BIN, GROK_MAX_TURNS, GROK_REASONING_EFFORT, GROK_SANDBOX, GROK_ALLOW_UNSANDBOXED, SENSITIVE
+    global GROK_BIN, GROK_MAX_TURNS, GROK_REASONING_EFFORT, GROK_SANDBOX, GROK_ALLOW_UNSANDBOXED, SENSITIVE, REQUIRE_GATES
 
     CFG = tomllib.loads(path.read_text())
     CONFIG_PATH = path
@@ -133,6 +134,8 @@ def load_config(path: Path) -> None:
               for m in CFG.get("models", [])}
     # [project] sensitive = true: only models that explicitly set trains_on_prompts = false may run
     SENSITIVE = bool(CFG.get("project", {}).get("sensitive", False))
+    # [project] require_gates = true: a phase runs only once its spec has a Gates section and is committed in the repo
+    REQUIRE_GATES = bool(CFG.get("project", {}).get("require_gates", False))
     PHASES = CFG.get("phases", [])
 
     wd = CFG.get("watchdog", {})
@@ -372,11 +375,32 @@ def _grok_argv(a, model: dict, dir_path: Path, kind: str) -> tuple[list[str], Pa
     return cmd, prompt_tmp
 
 
+def gates_problem(phase: str) -> str | None:
+    """Why this phase's pre-registered gates are not in force, or None when they are: the spec in the ops dir must
+    have a Gates section, and the same file must be committed in the repo's records folder (runbook step 0)."""
+    spec = OPS / "specs" / f"{phase}.md"
+    if not spec.exists():
+        return f"no spec at {spec}"
+    if "## Gates" not in spec.read_text():
+        return f"{spec.name} has no '## Gates' section (templates/spec.md)"
+    repo = Path(CFG["project"]["repo"]).expanduser().resolve()
+    records = CFG["project"].get("records_dir", "")
+    rel = f"{records}/specs/{phase}.md" if records else f"specs/{phase}.md"
+    r = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"HEAD:{rel}"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return f"the gates are not committed: copy the spec to {rel} in the repo and commit it on main"
+    return None
+
+
 def cmd_run(a):
     model = MODELS[a.model]
     if SENSITIVE and model.get("trains_on_prompts") is not False:
         sys.exit(f"refusing to run '{a.model}': [project] sensitive = true, and this model does not set "
                  "trains_on_prompts = false (its provider may train on prompts and code)")
+    if REQUIRE_GATES:
+        problem = gates_problem(a.phase)
+        if problem:
+            sys.exit(f"refusing to run phase '{a.phase}': {problem}")
     dir_path = check_worktree_safety(_resolve_dir(a.dir))
     driver = model.get("driver", "opencode")
     if driver == "claude":
