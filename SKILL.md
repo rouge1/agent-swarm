@@ -129,6 +129,10 @@ agent-swarm/
      `REPLACE_WITH_PROVIDER/MODEL` in each file with a model from your roster (`provider/model`). Check with
      `opencode agent list`. The `permission` and `mode` fields follow the 1.18 agent format and need a check on the
      first run.
+     Headless runs auto-deny reads outside the project, so the manager and advisor also need a scoped
+     `external_directory` allowance for the ops directory and the skill folder, for example in each agent file:
+     `permission:` / `external_directory:` / `"<ops>/**": allow` and `"<skill>/**": allow`, with the real paths
+     filled in. Without it the manager cannot read its spec or the runbook.
 6. **Dashboard:** start the local board (`swarm.py watch --serve 8765`, see below) so the user can watch from
    the first phase.
 
@@ -201,9 +205,9 @@ subagent runs nobody logged (`swarm.py log-run`). It never touches code, files o
   `allow_unsandboxed = false`, and check `git status` on `main` after every run.
 - **Every worker prompt names the files the worker may edit and says "Do not list or read anything outside the
   working directory."** A denied read makes some models quit silently.
-- **Workers start from the current `main`.** A fresh worktree can start from an old commit: have each worker run
-  `git merge --ff-only main` first, and run tests from the worktree root (an editable install points at the
-  main checkout).
+- **Workers start from the base the manager gave them.** The manager creates each worktree with `wt --from <base>`
+  (`main`, or the reviewed tests branch), so a worker never runs git commands that change state. Run tests from the
+  worktree root (an editable install points at the main checkout).
 - **Workers fix their own code** in their own session (`--session`). Anything the orchestrator edits in the
   product is logged with `swarm.py note "ORCHESTRATOR FIX: ..."`.
 - **Gates are fixed before a run.** Thresholds, the bake-off rubric and the winner rule are committed in the spec

@@ -4,7 +4,9 @@ and short probes.
 
 Independent reviewers from different models reviewed <task / the bake-off entries>. Reviewers sometimes misread
 code, so VERIFY every claim against the code before keeping it. Quote the file:line you checked.
-<For a bake-off: the entries are on branches <b1>, <b2>, <b3>; inspect each with `git diff main <branch> -- <paths>`.>
+<For a bake-off: the entries are on branches <b1>, <b2>, <b3>; inspect each with `git diff main <branch> -- <paths>`.
+Score and pick the winner ONLY by the spec's pre-registered rubric and winner rule, pasted here:
+<the spec's Gates section: rubric weights and winner rule>. Do not add your own criteria.>
 
 REVIEWS:
 <paste each review, labelled with its source: A (model), B (model), …>
