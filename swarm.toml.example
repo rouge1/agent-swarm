@@ -113,6 +113,27 @@ name = "DeepSeek V4.1 Flash"
 # driver = "opencode"
 # role = ""
 
+# Claude Haiku 5.5 through OpenRouter, the same route as the other roster models. Cheap, fast; good for scribing,
+# triage and routine work. Not free: trains_on_prompts stays unset (= may train) until its terms are checked, so a
+# sensitive project refuses it.
+[[models]]
+key = "haiku"
+id = "openrouter/anthropic/claude-haiku-5.5"
+name = "Claude Haiku 5.5"
+# driver = "opencode"
+# role = "cheap: triage, routine work"
+
+# Claude Haiku 5.5, run as an Agent-tool subagent by the orchestrator (driver = "claude"). `run` refuses this driver:
+# launch it as a subagent and log its run with `swarm.py log-run`. Cheap, fast, good for scribing and triage.
+# Its prices are the placeholder under [claude.prices]. Leave trains_on_prompts unset (= may train) until the terms
+# are checked: a sensitive project then refuses it.
+[[models]]
+key = "haiku"
+id = "claude-haiku-5-5"
+name = "Claude Haiku 5.5"
+driver = "claude"
+role = "subagent: triage, scribe"
+
 # Phases shown on the dashboard's phase rail and used to bucket spend
 # (`swarm.py phase <id> active|done` moves the pointer). This is a generic
 # 6-phase template -- rename/reword freely, add or remove phases, as long as
