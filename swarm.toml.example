@@ -46,7 +46,7 @@ lint_cmd = "ruff check ."
 # every model that does not set trains_on_prompts = false, reviewers included. This restricts WHICH providers may
 # see the data (no training on prompts); it does not keep the data on this machine. For data that must never leave
 # the machine, use no remote model at all. Off by default.
-# Not covered: driver = "claude" subagents, which `run` never launches, and the manager, advisor and scribe agents,
+# Not covered: driver = "claude" subagents, which `run` never launches, and the manager and advisor agents,
 # which read the code outside `run`. Keep them off sensitive repos unless the planner accepts that those models see the code.
 sensitive = false
 

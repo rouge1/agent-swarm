@@ -16,7 +16,7 @@ permission:
     "python3 *scripts/swarm.py* log-run *": allow
     "python3 *scripts/swarm.py* note *": allow
     "python3 *scripts/swarm.py* watch --once": allow
-    "python3 *scripts/swarm.py* site": allow
+    
 ---
 
 You are the SCRIBE for a swarm phase. You keep the board telling the story: what each agent is doing and whether it
