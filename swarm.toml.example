@@ -82,6 +82,8 @@ bin = "opencode"
 key = "sol"
 id = "openrouter/openai/gpt-6.1-sol"
 name = "GPT-6.1 Sol"
+# trains_on_prompts = false   # set only if the provider's terms say prompts are not used for training.
+# With [project] sensitive = true, a model without this flag is refused: at least one model must set it.
 # driver = "opencode"
 # role = ""
 

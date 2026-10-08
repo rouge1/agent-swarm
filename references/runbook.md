@@ -81,8 +81,12 @@ To find a session for a fix round:
 `grep '"<phase>"' data/ledger.jsonl | grep '"task": "<task>"' | grep -oE '"session": "[^"]*"' | head -1`
 
 ## Scribe
-If the launch prompt names a scribe, relaunch it between your own steps, about every 5 minutes while workers
-run: a cheap model with `prompts/scribe.md`, in the background, never waited on. It only writes board events.
+If the launch prompt names a scribe, keep it running about every 5 minutes while workers run: a cheap model with
+`prompts/scribe.md`, never waited on. It only writes board events. How it is launched depends on the runtime:
+- **Claude Code:** relaunch the `swarm-scribe` subagent between your own steps, in the background.
+- **OpenCode:** run it on a timer, not from your own session, from the project repo root where
+  `.opencode/agents/` lives, so the restricted agent loads: `opencode run --agent swarm-scribe -m <model> "Scribe pass:
+  <prompt contents>"`, with `--config <ops>/swarm.toml` in the instructions.
 Read its trouble notes in `swarm.py agents` / the feed like any other signal; crashed runs are yours to
 `recover`.
 

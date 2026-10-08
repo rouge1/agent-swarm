@@ -5,9 +5,14 @@ mode: subagent
 model: REPLACE_WITH_PROVIDER/MODEL
 permission:
   edit: deny
-  bash:
+    bash:
     "*": deny
-    "python3 *scripts/swarm.py*": allow
+    "python3 *scripts/swarm.py* agents*": allow
+    "python3 *scripts/swarm.py* activity*": allow
+    "python3 *scripts/swarm.py* scan*": allow
+    "python3 *scripts/swarm.py* log-run*": allow
+    "python3 *scripts/swarm.py* watch*": allow
+    "python3 *scripts/swarm.py* site*": allow
 ---
 
 You are the SCRIBE for a swarm phase. You keep the board telling the story: what each agent is doing and whether it
