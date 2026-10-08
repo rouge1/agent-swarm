@@ -131,6 +131,30 @@ class GateCheck(unittest.TestCase):
         self.assertEqual(msg, "")
         self.assertTrue(reached)
 
+    def test_lookalike_heading_is_not_a_gates_section(self):
+        setup(self.tmp, "true", "# Phase p1\n\n## Gatesmanship\nnotes\n", True)
+        msg, reached = try_run()
+        self.assertIn("## Gates", msg)
+        self.assertFalse(reached)
+
+    def test_duplicate_gates_sections_are_refused(self):
+        setup(self.tmp, "true", GATES + "\n" + GATES, True)
+        msg, reached = try_run()
+        self.assertIn("more than one", msg)
+        self.assertFalse(reached)
+
+    def test_gates_on_another_branch_do_not_count(self):
+        setup(self.tmp, "true", GATES, False)
+        git(self.tmp / "repo", "checkout", "-q", "-b", "other")
+        (self.tmp / "repo" / "records" / "specs").mkdir(parents=True, exist_ok=True)
+        (self.tmp / "repo" / "records" / "specs" / "p1.md").write_text(GATES)
+        git(self.tmp / "repo", "add", "records")
+        git(self.tmp / "repo", "commit", "-q", "-m", "gates on other")
+        git(self.tmp / "repo", "checkout", "-q", "main")
+        msg, reached = try_run()
+        self.assertIn("not committed", msg)
+        self.assertFalse(reached)
+
     def test_default_records_dir_matches_sync(self):
         setup(self.tmp, "true", GATES, True)
         text = (self.tmp / "ops" / "swarm.toml").read_text().replace('records_dir = "records"\n', "")

@@ -78,7 +78,8 @@ To run workers in parallel: `nohup python3 <skill>/scripts/swarm.py run ... > da
 about 15 s, then wait with one blocking loop.
 
 To find a session for a fix round:
-`grep '"<phase>"' data/ledger.jsonl | grep '"task": "<task>"' | grep -oE '"session": "[^"]*"' | head -1`
+`grep '"phase": "<phase>"' data/ledger.jsonl | grep '"task": "<task>"' | grep '"model": "<model>"' | grep '"outcome": "ok"' | grep -oE '"session": "[^"]*"' | tail -1`
+(filter by the author's model too: a bake-off has one session per entry, and the latest successful run is the one to resume)
 
 ## Scribe
 If the launch prompt names a scribe, keep it running about every 5 minutes while workers run: a cheap model with

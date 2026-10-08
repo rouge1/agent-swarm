@@ -375,10 +375,21 @@ def _grok_argv(a, model: dict, dir_path: Path, kind: str) -> tuple[list[str], Pa
     return cmd, prompt_tmp
 
 
+GATES_HEADING = re.compile(r"^## Gates(?=[ (]|$)", re.M)
+
+
 def gates_section(text: str) -> str | None:
-    """The '## Gates' section of a spec, up to the next '## ' heading, or None when there is none."""
-    m = re.search(r"^## Gates.*?(?=^## |\Z)", text, re.S | re.M)
-    return m.group(0).strip() if m else None
+    """The one '## Gates' section of a spec, up to the next '## ' heading. None when there is no Gates section;
+    ValueError when there are two, so a spec cannot carry two sets of gates."""
+    starts = list(GATES_HEADING.finditer(text))
+    if not starts:
+        return None
+    if len(starts) > 1:
+        raise ValueError("more than one '## Gates' section")
+    start = starts[0].start()
+    nxt = re.search(r"^## ", text[starts[0].end():], re.M)
+    end = starts[0].end() + nxt.start() if nxt else len(text)
+    return text[start:end].strip()
 
 
 def gates_problem(phase: str) -> str | None:
@@ -388,16 +399,23 @@ def gates_problem(phase: str) -> str | None:
     spec = OPS / "specs" / f"{phase}.md"
     if not spec.exists():
         return f"no spec at {spec}"
-    local = gates_section(spec.read_text())
+    try:
+        local = gates_section(spec.read_text())
+    except ValueError as e:
+        return f"{spec.name}: {e}"
     if local is None:
         return f"{spec.name} has no '## Gates' section (templates/spec.md)"
     repo = Path(CFG["project"]["repo"]).expanduser().resolve()
     records = CFG["project"].get("records_dir", "tools/swarm-records")
     rel = f"{records}/specs/{phase}.md"
-    r = subprocess.run(["git", "-C", str(repo), "show", f"HEAD:{rel}"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", str(repo), "show", f"main:{rel}"], capture_output=True, text=True)
     if r.returncode != 0:
         return f"the gates are not committed: copy the spec to {rel} in the repo and commit it on main"
-    if gates_section(r.stdout) != local:
+    try:
+        committed = gates_section(r.stdout)
+    except ValueError as e:
+        return f"the committed {rel}: {e}"
+    if committed != local:
         return (f"the Gates in {spec.name} differ from the committed copy in {rel}: commit the new gates as an "
                 "amendment, or restore the committed ones")
     return None
