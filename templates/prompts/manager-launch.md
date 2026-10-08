@@ -18,4 +18,10 @@ Dashboard: <"local board, already refreshed by `swarm.py watch`: nothing to do" 
 Scribe: <"relaunch a <cheap model> scribe with <OPS>/prompts/scribe.md about every 5 minutes while workers run"
 | "none: the watch timer only">.
 
+Merge: <"you merge --no-ff on main when the phase is done" | "do not merge: hand the merge list (branches and tips) to the planner">.
+
+Advisor: <"consult <advisor model> at the runbook's advisor points (send it the question and the file paths)" | "none">.
+
+Sensitive: <"[project] sensitive is true: only models with trains_on_prompts = false may run" | "not sensitive">.
+
 FINAL REPORT: as in the runbook's "Final report" section, under 250 words.

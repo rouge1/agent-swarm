@@ -8,6 +8,25 @@ Everything project-specific (paths, models, forbidden dirs, test and lint comman
 `python3 <skill>/scripts/swarm.py status` first to see the config, the current phase and open tasks. The launch
 prompt gives you the spec path, the phase id, which models to use, and what is pre-approved (for example pushing).
 
+## Advisor (optional, the launch prompt names it)
+A stronger model you can consult, not a worker. Consult it at these points only (about 3–5 calls per phase):
+1. before the first worker launch of the phase, to check the plan and the gates
+2. before picking a bake-off winner, when scores or reviews disagree
+3. before acting on a `[high]` finding that would change code or the spec
+4. before merging
+5. when triage is unclear
+
+Send the question with the file paths it needs: the advisor starts with no context. It answers; you decide and
+say what you did with its answer in the report. Under Claude Code it is a read-only Sonnet subagent; under
+OpenCode it is the `swarm-advisor` agent (see SKILL.md, "Manager and scribe agents").
+
+## Before you launch: load and sensitivity
+- Check `uptime` and `nproc` before any parallel launch. Keep the 1-minute load below 0.75 × cores, or wait.
+  A loaded machine skews run times and makes timing numbers meaningless.
+- If `[project] sensitive = true` in `swarm.toml`, `swarm.py run` refuses every model without
+  `trains_on_prompts = false`. Do not work around this: add a model that qualifies, or tell the planner.
+- Reviewers read the whole worktree. Never put credentials or personal data in a repo or worktree a model can read.
+
 ## Cost discipline (read this twice)
 Your own tool calls are the most expensive part of a phase, because each one re-reads your whole context.
 OpenCode runs cost cents.
@@ -30,6 +49,9 @@ OpenCode runs cost cents.
    `swarm.py note "ORCHESTRATOR FIX: <what, why>"`.
 5. Kill by pid (`pgrep -af "opencode run"`, `ss -ltnp 'sport = :PORT'`), never with `pkill -f`.
 6. Never run a bare `git stash`. Workers never commit. You commit on their branches.
+7. Gates are fixed before any run. Do not change a threshold, the scoring rubric or the winner rule after you see
+   results. If one must change, add a dated entry under the spec's "Amendments" with its direction (conservative or
+   relaxed). A relaxed gate needs the planner's or user's approval first.
 
 ## Commands (run from the ops dir)
 | Command | Use |
@@ -65,6 +87,10 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
 `recover`.
 
 ## The phase, step by step
+
+### 0. Gates
+- Commit the spec's "Gates" section (targets, thresholds, the bake-off rubric and the winner rule) on main before
+  step 1. No worker runs before that commit.
 
 ### 1. Tests first
 - `wt <phase> tests`. One OpenCode **test author** writes the contracts and acceptance tests from the spec, using
@@ -109,8 +135,10 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
 - Code reviewers can't see visual bugs, so this step is yours.
 
 ### 7. Merge and record
+- Default: you merge. The launch prompt's `Merge:` line can say instead "hand the merge list to the planner". Then
+  do not merge: report the branches and their tips, and stop.
 - From the main checkout, run `git merge --no-ff` for the phase branches (an octopus merge is fine). The full
-  test suite and lint must pass on main.
+  test suite and lint must pass on main. Consult the advisor before this step.
 - `swarm.py sync`, then commit ("records: sync ops records").
 - Push only if pre-approved.
 - `swarm.py phase <phase> done`, `swarm.py claude`. The local board picks both up on its next pass; only for a
@@ -142,7 +170,7 @@ Known causes:
 - over-probing past the timeout
 - a silent model or harness stall, which resuming fixes
 
-## Final report to the planner (under 250 words)
+## Final report to the planner (use `templates/report.md`, under 250 words)
 - Winners and scores
 - Issues found and fixed, per model
 - Measured targets before and after, if the spec had numbers
