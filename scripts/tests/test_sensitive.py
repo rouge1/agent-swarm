@@ -85,6 +85,7 @@ class SensitiveGuard(unittest.TestCase):
 
     def test_sensitive_allows_explicit_no_training_model(self):
         load("true", self.tmp)
+        self.assertTrue(swarm.SENSITIVE)
         msg, reached_worktree_check = try_run("safe")
         self.assertEqual(msg, "")
         self.assertTrue(reached_worktree_check)
