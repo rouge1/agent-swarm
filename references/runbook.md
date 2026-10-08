@@ -92,7 +92,7 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
 ## The phase, step by step
 
 ### 0. Gates
-- Copy `specs/<phase>.md` into the repo's records folder (`<repo>/<records_dir>/specs/`), then commit its "Gates" section (targets, thresholds, the bake-off rubric and the winner rule) on main before step 1. The ops directory is not versioned, so the commit is what fixes the gates. No worker runs before that commit.
+- You (the manager) copy `specs/<phase>.md` into the repo's records folder (`<repo>/<records_dir>/specs/`), then commit its "Gates" section (targets, thresholds, the bake-off rubric and the winner rule) on main before step 1. The ops directory is not versioned, so the commit is what fixes the gates. No worker runs before that commit.
 
 ### 1. Tests first
 - `wt <phase> tests`. One **test author** (any driver in the roster) writes the contracts and acceptance tests from the spec, using
@@ -110,14 +110,17 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
   sampled points.
 
 ### 3. Implement
-- Before any implementation worktree: merge the reviewed tests branch into main (`git merge --no-ff`, with the
-  tests and contracts on main). `wt` branches from main, so the implementers must see the tests from there.
+- Create every implementation worktree from the reviewed tests branch: `wt <phase> <task> --model m --from <tests-branch>`.
+  This needs no merge into main, so it respects a launch prompt that says not to merge. If the tests change after an
+  implementer has branched, bring the corrected tests into its branch (`git merge <tests-branch>` in its worktree)
+  before it resumes.
 - **Core logic gets a bake-off.** 2–3 models get the same prompt (`task.md`), each in its own worktree
   (`wt ... --model m`). Everything else gets a single author. Tasks run in parallel when their file ownership
   doesn't overlap.
 - As each run finishes: commit it on its branch, record the test pass/fail count and ruff result
   (`swarm.py tests` / `task`).
-- If several entries fail the same test in the same way, suspect the test. Send it back to the test author.
+- If several entries fail the same test in the same way, suspect the test. Send it back to the test author, then
+  propagate the corrected tests to every active implementation branch as above before anyone resumes.
 
 ### 4. Review and consensus
 - Each passing entry is reviewed by two models that did not write it (`review.md`; `review-ui.md` for UI, with
@@ -133,8 +136,8 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
 - Run one more short review round only if a `[high]` item was involved.
 
 ### 6. Integrate and play-test
-- For UI or cross-module work: build a temporary integration worktree (`wt <phase> integ-<m>` from the winning
-  branch, then `git merge --no-ff` the other branches). Run the app and use `scripts/screenshot.py` with a steps
+- For UI or cross-module work: build a temporary integration worktree (`wt <phase> integ-<m> --from <winning-branch>`,
+  then `git merge --no-ff` the other branches). Run the app and use `scripts/screenshot.py` with a steps
   file. Look at the PNGs.
 - Code reviewers can't see visual bugs, so this step is yours.
 

@@ -20,7 +20,7 @@ Read `references/lessons.md` before a first run. It explains why the process loo
 | Role | Who | Does | Never does |
 |---|---|---|---|
 | Planner | The strongest model (the main session) | Project plan, phase specs, acceptance targets, `AGENTS.md`, launching phase managers, reading their reports, talking to the user | Coordinate a phase step by step, write feature code |
-| Phase manager | A cheap-but-careful subagent, one per phase, fresh context (`agents/`) | Everything in `references/runbook.md`: gates, worktrees, launching workers, reviews, fix rounds, merge, play-test, report | Write feature code or tests (tiny fixes only, and logged); change a gate after seeing results |
+| Phase manager | A cheap-but-careful subagent, one per phase, fresh context (`agents/`) | Everything in `references/runbook.md`: gates, worktrees, launching workers, reviews, fix rounds, merge, play-test, report | Write feature code or tests (tiny fixes only, and logged); change a gate without a dated amendment (see runbook rule 7) |
 | Advisor | A stronger model the phase manager consults at a few decision points (optional) | Reviews a plan, a score, a finding, a merge or a triage question; read only | Make changes; run commands |
 | Checklist agent | A small, cheap subagent (optional) | Check that a fix list landed; mechanical verification | Make judgment calls |
 | Workers | 2–4 models from `[[models]]` | Implement tasks, write tests, fix their own review findings | Touch files outside their task, or anything outside their worktree |
@@ -136,8 +136,7 @@ agent-swarm/
 
 1. **Planner:** write `specs/<phase>.md` from `templates/spec.md`. List the tasks, file ownership (one owner per
    file), the acceptance targets as numbers, the gates (pass/fail thresholds, the bake-off rubric, the winner rule),
-   and which tasks get a bake-off. Keep it short and exact: every vague line costs a review round. Commit the gates
-   before any run.
+   and which tasks get a bake-off. Keep it short and exact: every vague line costs a review round. The manager commits the gates before any run (runbook step 0).
 2. **Planner:** launch a phase manager with `templates/prompts/manager-launch.md`, filled in (its Merge, Advisor and
    Sensitive lines say what the manager may do). Under Claude Code, start the `swarm-manager` agent; under OpenCode,
    run it with `--agent swarm-manager`. It reads `references/runbook.md` and runs the whole phase.
