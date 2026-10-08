@@ -195,7 +195,8 @@ subagent runs nobody logged (`swarm.py log-run`). It never touches code, files o
 - **Workers only ever run inside a worktree under `project.worktrees`.** `swarm.py run` enforces this and refuses
   the main checkout and anything in `project.forbidden`. Never call a worker CLI directly, and never bypass the
   check.
-- **Launch every worker through `swarm.py run`.** That is what records time, cost, sessions and events.
+- **Launch every OpenCode and Grok worker through `swarm.py run`.** That is what records time, cost, sessions and events.
+  The named exceptions are the OpenCode scribe and Claude-driver subagents (see `references/runbook.md`).
 - **Never run a worker with auto-approve outside its sandbox.** `--cwd` or `--dir` is not a sandbox. Keep
   `allow_unsandboxed = false`, and check `git status` on `main` after every run.
 - **Every worker prompt names the files the worker may edit and says "Do not list or read anything outside the

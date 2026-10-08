@@ -15,7 +15,7 @@ permission:
     "python3 *scripts/swarm.py* scan": allow
     "python3 *scripts/swarm.py* log-run *": allow
     "python3 *scripts/swarm.py* note *": allow
-    "python3 *scripts/swarm.py* watch": allow
+        "python3 *scripts/swarm.py* watch --once": allow
     "python3 *scripts/swarm.py* site": allow
 ---
 

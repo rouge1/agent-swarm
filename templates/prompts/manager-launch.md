@@ -15,7 +15,7 @@ pushing and report">. Nothing else outward.
 Dashboard: <"local board, already refreshed by `swarm.py watch`: nothing to do" | "push with ArtifactData to
 <url> at milestones" | "none">.
 
-Scribe: <"relaunch a <cheap model> scribe with <OPS>/prompts/scribe.md about every 5 minutes while workers run"
+Scribe: <"run the swarm-scribe agent (Claude) or `opencode run --agent swarm-scribe` (OpenCode) about every 5 minutes while workers run, with <OPS>/prompts/scribe.md"
 | "none: the watch timer only">.
 
 Merge: <"you merge --no-ff on main when the phase is done" | "do not merge: hand the merge list (branches and tips) to the planner">.

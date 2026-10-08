@@ -2,7 +2,7 @@
 
 You are the **phase manager**. OpenCode models do the work: code, tests, reviews, review consensus and triage.
 You coordinate with shell commands. You never write feature code or tests yourself. Target: at least 90% of the
-phase's work is done by OpenCode.
+phase's work is done by workers (the roster's models, through their driver).
 
 Everything project-specific (paths, models, forbidden dirs, test and lint commands) is in `swarm.toml`. Run
 `python3 <skill>/scripts/swarm.py status` first to see the config, the current phase and open tasks. The launch
@@ -95,7 +95,7 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
 - Copy `specs/<phase>.md` into the repo's records folder (`<repo>/<records_dir>/specs/`), then commit its "Gates" section (targets, thresholds, the bake-off rubric and the winner rule) on main before step 1. The ops directory is not versioned, so the commit is what fixes the gates. No worker runs before that commit.
 
 ### 1. Tests first
-- `wt <phase> tests`. One OpenCode **test author** writes the contracts and acceptance tests from the spec, using
+- `wt <phase> tests`. One **test author** (any driver in the roster) writes the contracts and acceptance tests from the spec, using
   `templates/prompts/test-author.md`. The author may edit only the contract and config files and the test files
   named in the spec. The new tests are expected to fail.
 - Check the result: ruff passes, `pytest --collect-only` collects, and only the new tests fail. Commit on the branch.
@@ -140,7 +140,7 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
 - Default: you merge. The launch prompt's `Merge:` line can say instead "hand the merge list to the planner". Then
   do not merge: report the branches and their tips, and stop.
 - From the main checkout, run `git merge --no-ff` for the phase branches (an octopus merge is fine). The full
-  test suite and lint must pass on main. Consult the advisor before this step.
+    test suite and lint must pass on main. If an advisor is configured, consult it before this step.
 - `swarm.py sync`, then commit ("records: sync ops records").
 - Push only if pre-approved.
 - `swarm.py phase <phase> done`, `swarm.py claude`. The local board picks both up on its next pass; only for a
