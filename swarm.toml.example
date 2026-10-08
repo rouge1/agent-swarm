@@ -213,6 +213,7 @@ cache_write_5m = 5
 cache_write_1h = 8
 name = "Opus 5.5"
 
+# Sonnet 5.5 (the advisor) is matched by this Sonnet 5 entry until its own list prices are added: check them.
 [claude.prices."claude-sonnet-5"]
 in = 2
 out = 10

@@ -1,5 +1,5 @@
 ---
-description: Phase manager for an agent-swarm phase. Runs one phase end to end with OpenCode workers through swarm.py, following references/runbook.md. Launch with --agent swarm-manager.
+description: Phase manager for an agent-swarm phase. Runs one phase end to end with OpenCode or Grok workers through swarm.py, following references/runbook.md. Launch with --agent swarm-manager.
 mode: all
 # Pick a mid-tier model from [[models]] in swarm.toml, or another provider/model. Format: provider/model.
 # Check it is installed with: opencode agent list

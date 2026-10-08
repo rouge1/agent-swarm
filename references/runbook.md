@@ -39,9 +39,7 @@ OpenCode runs cost cents.
 - Aim for fewer than 120 tool calls per phase.
 
 ## Hard safety rules
-1. Workers only run through `swarm.py run --dir <worktree>`, and the worktree must be under `project.worktrees`.
-   The tool refuses anything else. Never call `opencode` directly, and never edit the config to get around a
-   refusal.
+1. OpenCode and Grok workers only run through `swarm.py run --dir <worktree>`, and the worktree must be under `project.worktrees`. The tool refuses anything else. Never call `opencode` directly for a worker, and never edit the config to get around a refusal. Named exceptions: the OpenCode scribe runs as `opencode run --agent swarm-scribe` on a timer ("Scribe" below), and Claude-driver workers are Agent-tool subagents logged with `swarm.py log-run`.
 2. Every prompt you write for a worker names the files it may edit and contains: "Do not list or read anything
    outside the working directory."
 3. Push, publish or send only what the launch prompt says is pre-approved. Never force-push, and never delete
@@ -94,8 +92,7 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
 ## The phase, step by step
 
 ### 0. Gates
-- Commit the spec's "Gates" section (targets, thresholds, the bake-off rubric and the winner rule) on main before
-  step 1. No worker runs before that commit.
+- Copy `specs/<phase>.md` into the repo's records folder (`<repo>/<records_dir>/specs/`), then commit its "Gates" section (targets, thresholds, the bake-off rubric and the winner rule) on main before step 1. The ops directory is not versioned, so the commit is what fixes the gates. No worker runs before that commit.
 
 ### 1. Tests first
 - `wt <phase> tests`. One OpenCode **test author** writes the contracts and acceptance tests from the spec, using
@@ -176,7 +173,6 @@ Known causes:
 - a silent model or harness stall, which resuming fixes
 
 ## Final report to the planner (use `templates/report.md`, under 250 words)
-- Winners and scores
 - Outcome, and the gates table with measured values against the pre-registered thresholds
 - Winners and scores, and the bake-off rubric used
 - Issues found and fixed, per model; measured vs inferred; what was not shown
