@@ -130,9 +130,10 @@ agent-swarm/
      `opencode agent list`. The `permission` and `mode` fields follow the 1.18 agent format and need a check on the
      first run.
      Headless runs auto-deny reads outside the project, so the manager and advisor also need a scoped
-     `external_directory` allowance for the ops directory and the skill folder, for example in each agent file:
-     `permission:` / `external_directory:` / `"<ops>/**": allow` and `"<skill>/**": allow`, with the real paths
-     filled in. Without it the manager cannot read its spec or the runbook.
+     `external_directory` allowance for the ops directory, the skill folder and `project.worktrees` (so the advisor
+     can read unmerged implementations), for example in each agent file:
+     `permission:` / `external_directory:` / `"<ops>/**": allow`, `"<skill>/**": allow` and `"<worktrees>/**": allow`,
+     with the real paths filled in. Without it the manager cannot read its spec or the runbook.
 6. **Dashboard:** start the local board (`swarm.py watch --serve 8765`, see below) so the user can watch from
    the first phase.
 
@@ -184,6 +185,8 @@ subagent runs nobody logged (`swarm.py log-run`). It never touches code, files o
 
 - **Claude Code:** the `swarm-scribe` agent (Haiku 5.5) in the background with the filled-in prompt, relaunched
   every ~5 minutes by the phase manager between its own steps (or `/loop 5m`).
+- **Scribe memory:** a timer run starts fresh and cannot see what it logged before. Pass the last few `swarm.py agents`
+  lines and the recent `activity` entries in its prompt so it does not log the same summary twice.
 - **OpenCode:** `opencode run --agent swarm-scribe` on a timer, launched from the project repo root (where
   `.opencode/agents/` lives), with the scribe's instructions naming `--config <ops>/swarm.toml`. Its agent definition
   allows only the read and logging `swarm.py` subcommands. Glob permissions cannot fully bind a command's arguments,
