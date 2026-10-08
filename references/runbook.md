@@ -18,7 +18,7 @@ A stronger model you can consult, not a worker. Consult it at these points only 
 
 Send the question with the file paths it needs: the advisor starts with no context. It answers; you decide and
 say what you did with its answer in the report. Under Claude Code it is a read-only Sonnet subagent; under
-OpenCode it is the `swarm-advisor` agent (see SKILL.md, "Manager and scribe agents").
+OpenCode it is the `swarm-advisor` agent (see SKILL.md, setup step 5, "Agents").
 
 ## Before you launch: load and sensitivity
 - Check `uptime` and `nproc` before any parallel launch. Keep the 1-minute load below 0.75 × cores, or wait.
@@ -51,7 +51,7 @@ OpenCode runs cost cents.
 6. Never run a bare `git stash`. Workers never commit. You commit on their branches.
 7. Gates are fixed before any run. Do not change a threshold, the scoring rubric or the winner rule after you see
    results. If one must change, add a dated entry under the spec's "Amendments" with its direction (conservative or
-   relaxed). A relaxed gate needs the planner's or user's approval first.
+   relaxed). A relaxed gate needs the user's approval first.
 
 ## Commands (run from the ops dir)
 | Command | Use |
@@ -74,7 +74,7 @@ OpenCode runs cost cents.
 | `swarm.py push` | Print the claude.ai dashboard database batch, if that board is used (see references/dashboard.md) |
 | `swarm.py sync` | Copy records (events, ledger, prompts, specs, screenshots) into the repo |
 
-To run workers in parallel: `nohup python3 swarm.py run ... > data/logs/<name>.out 2>&1 &`. Stagger launches by
+To run workers in parallel: `nohup python3 <skill>/scripts/swarm.py run ... > data/logs/<name>.out 2>&1 &`. Stagger launches by
 about 15 s, then wait with one blocking loop.
 
 To find a session for a fix round:

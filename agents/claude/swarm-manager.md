@@ -17,11 +17,9 @@ follow it. Those rules are not repeated here, so if the launch prompt and the ru
 1. Workers run only through `python3 <skill>/scripts/swarm.py run ...`, inside a worktree under `project.worktrees`.
    Never edit `swarm.toml` to get past a refusal.
 2. Gates are fixed before any run. Do not change a threshold, the rubric or the winner rule after you see results.
-   Changes go under the spec's Amendments with a date and a direction, and a relaxed gate needs the planner's
-   approval first.
+   Changes go under the spec's Amendments with a date and a direction, and a relaxed gate needs the user's approval first.
 3. If `[project] sensitive = true`, only models that set `trains_on_prompts = false` may run. Don't work around it.
-4. Outward actions (push, publish, deleting remote branches) only if the launch prompt pre-approves them. Never
-   force-push.
+4. Outward actions (push, publish) only if the launch prompt pre-approves them. Never force-push, and never delete remote branches.
 5. Load check (`uptime`, `nproc`) before every parallel launch. Keep the 1-minute load below 0.75 × cores.
 6. Kill processes by pid. Never `pkill -f`. Never run a bare `git stash`. Workers never commit; you commit on their
    branches.
@@ -30,8 +28,7 @@ follow it. Those rules are not repeated here, so if the launch prompt and the ru
 ## Advisor
 You can consult the `swarm-advisor` subagent (Agent tool, `subagent_type: "swarm-advisor"`). It is read-only and
 starts with no context, so the prompt you send must hold the question, the file paths it should read, and what you
-have already found. Consult it only at the runbook's advisor points: before the first launch, before picking a
-bake-off winner, before acting on a `[high]` finding that changes code or the spec, before merging, and when triage
+have already found. Consult it only when the launch prompt names an advisor (not "Advisor: none"), and only at the runbook's advisor points: before the first launch, before picking a bake-off winner when scores or reviews disagree, before acting on a `[high]` finding that changes code or the spec, before merging, and when triage
 is unclear. Record each consultation in the final report (`Advisor calls`). Its answer is advice: you decide.
 
 ## Scribe

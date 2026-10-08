@@ -42,10 +42,16 @@ records_dir = "tools/swarm-records"
 test_cmd = "pytest -q"
 lint_cmd = "ruff check ."
 
-# Set true when the repo holds anything that must not leave the machine (credentials, personal data,
-# private or client code). `swarm.py run` then refuses every model that does not set
-# trains_on_prompts = false, reviewers included. Off by default.
+# Set true when the repo holds credentials, personal data, or private or client code. `swarm.py run` then refuses
+# every model that does not set trains_on_prompts = false, reviewers included. This restricts WHICH providers may
+# see the data (no training on prompts); it does not keep the data on this machine. For data that must never leave
+# the machine, use no remote model at all. Off by default.
+# Not covered: driver = "claude" subagents, which `run` never launches. Keep them off sensitive repos unless the
+# planner accepts that Anthropic subagents see the code.
 sensitive = false
+
+# Optional label shown on the dashboard as the orchestrating agent (swarm.py reads it for board metadata).
+# orchestrator = ""
 
 [opencode]
 # Executable used for every `opencode run` / `opencode export` call. Point

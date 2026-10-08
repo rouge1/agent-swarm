@@ -35,7 +35,10 @@ agents.
 
 **Sensitive data:** set `[project] sensitive = true` in `swarm.toml` when the repo holds credentials, personal data
 or private code. Then `swarm.py run` refuses every model that does not set `trains_on_prompts = false`, reviewers
-included. Free tiers may train on prompts and code. Keep them off sensitive projects.
+included. Free tiers may train on prompts and code. Keep them off sensitive projects. The guard does not cover
+`driver = "claude"` subagents, which `run` never launches: keep those off sensitive repos unless the planner accepts
+that Anthropic subagents see the code. The flag restricts which providers may see the data; it does not keep data
+on this machine.
 
 **Cost rule:** the orchestrator's cost comes from how many tool calls it makes multiplied by how large its context
 is, and not from the workers. Keep the planner's turns few and short. Give each phase a fresh manager. Managers
@@ -93,7 +96,8 @@ agent-swarm/
    Put their ids and drivers in the config.
 3. **Create the repo and ops dir:**
    ```bash
-   mkdir -p <root>/<project> && git -C <root>/<project> init
+   mkdir -p <root>/<project> && git -C <root>/<project> init -b main
+
    python3 <skill>/scripts/swarm.py init --dir <root>/<project>-ops --name "<Project>" --repo <root>/<project>
    ```
    Edit `swarm.toml`:
@@ -116,10 +120,10 @@ agent-swarm/
    With `[claude] session` set, the task card also shows your latest action, read from your transcript.
 5. **Agents (Claude Code and OpenCode):** copy the manager, scribe and advisor agents into the project so the
    planner can launch them by name:
-   - Claude Code: `cp <skill>/agents/claude/*.md <root>/<project>/.claude/agents/`. The model is pinned to
+   - Claude Code: `mkdir -p <root>/<project>/.claude/agents && cp <skill>/agents/claude/*.md <root>/<project>/.claude/agents/`. The model is pinned to
      `claude-haiku-5-5` (manager, scribe) and `claude-sonnet-5-5` (advisor). If Claude Code rejects a full model id in
      the frontmatter, change it to the alias `haiku` or `sonnet`. New agents load when the session restarts.
-   - OpenCode: `cp <skill>/agents/opencode/*.md <root>/<project>/.opencode/agents/`, then replace
+   - OpenCode: `mkdir -p <root>/<project>/.opencode/agents && cp <skill>/agents/opencode/*.md <root>/<project>/.opencode/agents/`, then replace
      `REPLACE_WITH_PROVIDER/MODEL` in each file with a model from your roster (`provider/model`). Check with
      `opencode agent list`. The `permission` and `mode` fields follow the 1.18 agent format and need a check on the
      first run.

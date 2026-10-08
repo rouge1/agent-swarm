@@ -7,7 +7,7 @@ permission:
   edit: deny
   bash:
     "*": deny
-    "python3 *swarm.py*": allow
+    "python3 *scripts/swarm.py*": allow
 ---
 
 You are the SCRIBE for a swarm phase. You keep the board telling the story: what each agent is doing and whether it
