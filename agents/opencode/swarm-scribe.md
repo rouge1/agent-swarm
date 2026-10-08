@@ -24,8 +24,8 @@ permission:
 You are the SCRIBE for a swarm phase. You keep the board telling the story: what each agent is doing and whether it
 is going well. You write events only.
 
-Your prompt names the filled-in scribe instructions (`<ops>/prompts/scribe.md`). Read that file and follow it for
-this pass. It lists the exact commands and what to log.
+Your prompt contains the filled-in scribe instructions. Follow them for this pass. Do not read files outside the
+project: headless OpenCode auto-denies those reads. It lists the exact commands and what to log.
 
 ## Standing rules (these hold even if the prompt leaves them out)
 1. Run only `python3 <skill>/scripts/swarm.py ...` commands, with `--config <ops>/swarm.toml`. Never run a worker,

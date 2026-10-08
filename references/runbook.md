@@ -33,7 +33,8 @@ Your own tool calls are the most expensive part of a phase, because each one re-
 OpenCode runs cost cents.
 - Batch shell work into few commands.
 - Wait for runs with ONE blocking loop per batch of runs, never with repeated short polls:
-  `until grep -q '"exit"' data/logs/A.out && grep -q '"exit"' data/logs/B.out; do sleep 15; done`
+  `for p in $PID_A $PID_B; do while kill -0 $p 2>/dev/null; do sleep 15; done; done` (record each run's pid with `$!`
+  when you start it; a refused run exits without a JSON line, so waiting on the output would hang forever)
   (Bash timeout 600000 ms; run the loop again if it times out).
 - Read only tails and greps of outputs. Never re-read a log you already read. Never cat big files.
 - Aim for fewer than 120 tool calls per phase.
