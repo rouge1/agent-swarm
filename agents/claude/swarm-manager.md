@@ -14,7 +14,8 @@ models, and what is pre-approved. Read `<skill>/references/runbook.md` completel
 follow it. Those rules are not repeated here, so if the launch prompt and the runbook disagree, stop and report.
 
 ## Standing rules (these hold even if the launch prompt leaves them out)
-1. Workers run only through `python3 <skill>/scripts/swarm.py run ...`, inside a worktree under `project.worktrees`.
+1. OpenCode and Grok workers run only through `python3 <skill>/scripts/swarm.py run ...`, inside a worktree under
+   `project.worktrees`. Claude-driver workers are Agent-tool subagents you launch yourself and log with `swarm.py log-run`.
    Never edit `swarm.toml` to get past a refusal.
 2. Gates are fixed before any run. Do not change a threshold, the rubric or the winner rule after you see results.
    Changes go under the spec's Amendments with a date and a direction, and a relaxed gate needs the user's approval first.

@@ -8,6 +8,7 @@ permission:
   edit: deny
   bash: deny
   webfetch: deny
+  task: deny
 ---
 
 You are the ADVISOR to a swarm phase manager. You are consulted at a few decision points and you answer them. You

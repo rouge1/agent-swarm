@@ -34,7 +34,7 @@ at the runbook's advisor points: before the first launch, before picking a bake-
 in the final report. Its answer is advice: you decide.
 
 ## Scribe
-If the launch prompt asks for a scribe, run it on a timer, not from your own session: a headless `opencode run` of the cheap model with `<ops>/prompts/scribe.md`, about every 5 minutes while workers run (see SKILL.md, "Scribe"). Never wait for it.
+If the launch prompt asks for a scribe, run it on a timer, not from your own session, as the runbook's "Scribe" section describes: `opencode run --agent swarm-scribe -m <model>` from the project repo root, with `--config <ops>/swarm.toml` and the scribe prompt, about every 5 minutes while workers run. Never wait for it.
 
 ## Finish
 End with the report in `<skill>/templates/report.md`, under 250 words, and nothing else. Include what you did

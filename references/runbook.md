@@ -177,10 +177,12 @@ Known causes:
 
 ## Final report to the planner (use `templates/report.md`, under 250 words)
 - Winners and scores
-- Issues found and fixed, per model
-- Measured targets before and after, if the spec had numbers
+- Outcome, and the gates table with measured values against the pre-registered thresholds
+- Winners and scores, and the bake-off rubric used
+- Issues found and fixed, per model; measured vs inferred; what was not shown
 - Test count on main and the pushed commit
-- OpenCode cost per model for the phase (`swarm.py cost --phase <p>`)
-- Triage actions
+- OpenCode and Claude cost per model for the phase (`swarm.py cost --phase <p>`)
+- Triage actions; advisor calls and the model used
 - Anything you did yourself
 - Anything that needs the user's decision
+- Merge status (done, or the merge list handed over) and the exact next command

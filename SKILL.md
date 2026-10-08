@@ -181,8 +181,8 @@ subagent runs nobody logged (`swarm.py log-run`). It never touches code, files o
 - **Claude Code:** the `swarm-scribe` agent (Haiku 5.5) in the background with the filled-in prompt, relaunched
   every ~5 minutes by the phase manager between its own steps (or `/loop 5m`).
 - **OpenCode or Grok:** a headless run of a cheap model with the prompt, from a timer (cron, a shell loop),
-  with its working directory set to the ops dir. It needs shell access for `swarm.py` only; give it a
-  permission profile that allows `python3 <skill>/scripts/swarm.py` and nothing else that writes.
+  launched from the project repo root (where `.opencode/agents/` lives) with `--agent swarm-scribe` and
+  `--config <ops>/swarm.toml`. Its agent definition allows only the read and logging `swarm.py` subcommands.
 - **No scribe agent:** `watch` alone still keeps the board live; cards show the latest action without a
   summary.
 

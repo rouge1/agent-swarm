@@ -5,12 +5,15 @@ mode: all
 model: REPLACE_WITH_PROVIDER/MODEL
 permission:
   edit: deny
-    bash:
+  task: deny
+  webfetch: deny
+  bash:
     "*": deny
     "python3 *scripts/swarm.py* agents*": allow
     "python3 *scripts/swarm.py* activity*": allow
     "python3 *scripts/swarm.py* scan*": allow
     "python3 *scripts/swarm.py* log-run*": allow
+    "python3 *scripts/swarm.py* note*": allow
     "python3 *scripts/swarm.py* watch*": allow
     "python3 *scripts/swarm.py* site*": allow
 ---
