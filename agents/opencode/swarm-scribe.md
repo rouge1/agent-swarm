@@ -1,6 +1,6 @@
 ---
 description: Scribe for an agent-swarm phase. Reads what every working agent is doing and writes one-line summaries and trouble notes to the board via swarm.py. Never changes code, files, git state or task status.
-mode: subagent
+mode: all
 # Use a cheap model. If [project] sensitive = true, it must also be trains_on_prompts = false.
 model: REPLACE_WITH_PROVIDER/MODEL
 permission:

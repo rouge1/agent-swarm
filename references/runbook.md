@@ -25,7 +25,8 @@ OpenCode it is the `swarm-advisor` agent (see SKILL.md, setup step 5, "Agents").
   A loaded machine skews run times and makes timing numbers meaningless.
 - If `[project] sensitive = true` in `swarm.toml`, `swarm.py run` refuses every model without
   `trains_on_prompts = false`. Do not work around this: add a model that qualifies, or tell the planner.
-- Reviewers read the whole worktree. Never put credentials or personal data in a repo or worktree a model can read.
+- Reviewers read the whole worktree. Never put credentials or personal data in a repo or worktree a model can read. `sensitive = true` only stops
+  providers that train on prompts; the models still read whatever is in the worktree, so keep credentials out of it.
 
 ## Cost discipline (read this twice)
 Your own tool calls are the most expensive part of a phase, because each one re-reads your whole context.

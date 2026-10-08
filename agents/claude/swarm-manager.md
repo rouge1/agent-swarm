@@ -1,6 +1,6 @@
 ---
 name: swarm-manager
-description: Phase manager for an agent-swarm phase. Runs one phase end to end with OpenCode, Grok or Claude workers through swarm.py, following references/runbook.md. Use when the planner launches a phase manager with a filled-in manager-launch prompt.
+description: Phase manager for an agent-swarm phase. Runs one phase end to end with OpenCode or Grok workers through swarm.py (Claude-driver workers are subagents you launch yourself, not through swarm.py), following references/runbook.md. Use when the planner launches a phase manager with a filled-in manager-launch prompt.
 model: claude-haiku-5-5
 tools: Bash, Read, Write, Edit, Glob, Grep, Agent
 ---
