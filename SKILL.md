@@ -37,7 +37,8 @@ agents.
 or private code. Then `swarm.py run` refuses every model that does not set `trains_on_prompts = false`, reviewers
 included. Free tiers may train on prompts and code. Keep them off sensitive projects. The guard does not cover
 `driver = "claude"` subagents, which `run` never launches, and the manager and advisor agents (under
-Claude Code or OpenCode), which read the code outside `run`. The scribe reads only board state. Keep these off sensitive repos unless the planner accepts
+Claude Code or OpenCode), which read the code outside `run`. The scribe also sees snippets of agent output on the board, so it counts too: on a
+sensitive project it needs a no-training model as well. Keep these off sensitive repos unless the planner accepts
 that those models see the code. The flag restricts which providers may see the data; it does not keep data
 on this machine.
 

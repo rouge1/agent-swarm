@@ -110,6 +110,8 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
   sampled points.
 
 ### 3. Implement
+- Before any implementation worktree: merge the reviewed tests branch into main (`git merge --no-ff`, with the
+  tests and contracts on main). `wt` branches from main, so the implementers must see the tests from there.
 - **Core logic gets a bake-off.** 2–3 models get the same prompt (`task.md`), each in its own worktree
   (`wt ... --model m`). Everything else gets a single author. Tasks run in parallel when their file ownership
   doesn't overlap.

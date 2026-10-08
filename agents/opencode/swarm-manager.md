@@ -26,8 +26,8 @@ follow it. If the launch prompt and the runbook disagree, stop and report.
    branches.
 7. Keep your own tool calls few: batch shell work, and wait for runs with one blocking loop, not repeated polls.
 
-Named exceptions to the swarm.py-only rule: the scribe (below), and Claude-driver workers, which are Agent-tool
-subagents you launch yourself and log with `swarm.py log-run`.
+Named exception to the swarm.py-only rule: the scribe (below). You have no Agent tool, so Claude-driver workers are
+not yours to launch in this runtime: report that the roster needs a Claude Code planner for them.
 
 ## Advisor
 If the launch prompt names an advisor (not "Advisor: none"), consult the `swarm-advisor` subagent (task tool, agent `swarm-advisor`). It is read-only and starts with no context,
