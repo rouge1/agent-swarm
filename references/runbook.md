@@ -1,6 +1,6 @@
 # Phase manager runbook
 
-You are the **phase manager**. OpenCode models do the work: code, tests, reviews, review consensus and triage.
+You are the **phase manager**. The roster's workers do the work: code, tests, reviews, review consensus and triage.
 You coordinate with shell commands. You never write feature code or tests yourself. Target: at least 90% of the
 phase's work is done by workers (the roster's models, through their driver).
 

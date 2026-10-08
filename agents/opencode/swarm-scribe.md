@@ -3,8 +3,10 @@ description: Scribe for an agent-swarm phase. Reads what every working agent is 
 mode: all
 # Use a cheap model. If [project] sensitive = true, it must also be trains_on_prompts = false.
 model: REPLACE_WITH_PROVIDER/MODEL
+# OpenCode applies the LAST matching bash rule (checked 2026-10-08 with two probes through swarm.py): keep "*": deny first.
 permission:
   edit: deny
+
   task: deny
   webfetch: deny
   bash:
