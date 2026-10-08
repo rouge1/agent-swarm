@@ -373,17 +373,17 @@ def _grok_argv(a, model: dict, dir_path: Path, kind: str) -> tuple[list[str], Pa
 
 
 def cmd_run(a):
-    dir_path = check_worktree_safety(_resolve_dir(a.dir))
     model = MODELS[a.model]
+    if SENSITIVE and model.get("trains_on_prompts") is not False:
+        sys.exit(f"refusing to run '{a.model}': [project] sensitive = true, and this model does not set "
+                 "trains_on_prompts = false (its provider may train on prompts and code)")
+    dir_path = check_worktree_safety(_resolve_dir(a.dir))
     driver = model.get("driver", "opencode")
     if driver == "claude":
         sys.exit(f"refusing to run '{a.model}': driver=claude workers are subagents the orchestrator runs "
                  "itself; log their runs with `swarm.py log-run`")
     if driver == "grok" and not GROK_SANDBOX and not GROK_ALLOW_UNSANDBOXED:
         sys.exit("grok driver needs a sandbox profile; set [grok] sandbox or allow_unsandboxed = true")
-    if SENSITIVE and model.get("trains_on_prompts") is not False:
-        sys.exit(f"refusing to run '{a.model}': [project] sensitive = true, and this model does not set "
-                 "trains_on_prompts = false (its provider may train on prompts and code)")
     kind = a.kind or ("fix" if a.session else "build")
     emit({"type": "task", "phase": a.phase, "task": a.task, "model": a.model,
           "status": "fixing" if kind == "fix" else "working"})
