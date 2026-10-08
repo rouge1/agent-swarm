@@ -117,6 +117,33 @@ class GateCheck(unittest.TestCase):
         self.assertEqual(msg, "")
         self.assertTrue(reached)
 
+    def test_refuses_gates_changed_after_commit(self):
+        setup(self.tmp, "true", GATES, True)
+        (self.tmp / "ops" / "specs" / "p1.md").write_text(GATES.replace("1 test", "5 tests"))
+        msg, reached = try_run()
+        self.assertIn("differ", msg)
+        self.assertFalse(reached)
+
+    def test_changes_outside_the_gates_section_are_allowed(self):
+        setup(self.tmp, "true", GATES, True)
+        (self.tmp / "ops" / "specs" / "p1.md").write_text(GATES + "\n## Tasks\n- new task notes\n")
+        msg, reached = try_run()
+        self.assertEqual(msg, "")
+        self.assertTrue(reached)
+
+    def test_default_records_dir_matches_sync(self):
+        setup(self.tmp, "true", GATES, True)
+        text = (self.tmp / "ops" / "swarm.toml").read_text().replace('records_dir = "records"\n', "")
+        (self.tmp / "ops" / "swarm.toml").write_text(text)
+        swarm.load_config(self.tmp / "ops" / "swarm.toml")
+        (self.tmp / "repo" / "tools" / "swarm-records" / "specs").mkdir(parents=True, exist_ok=True)
+        (self.tmp / "repo" / "tools" / "swarm-records" / "specs" / "p1.md").write_text(GATES)
+        git(self.tmp / "repo", "add", "tools")
+        git(self.tmp / "repo", "commit", "-q", "-m", "default records")
+        msg, reached = try_run()
+        self.assertEqual(msg, "")
+        self.assertTrue(reached)
+
 
 if __name__ == "__main__":
     unittest.main()

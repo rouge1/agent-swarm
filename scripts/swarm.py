@@ -375,20 +375,31 @@ def _grok_argv(a, model: dict, dir_path: Path, kind: str) -> tuple[list[str], Pa
     return cmd, prompt_tmp
 
 
+def gates_section(text: str) -> str | None:
+    """The '## Gates' section of a spec, up to the next '## ' heading, or None when there is none."""
+    m = re.search(r"^## Gates.*?(?=^## |\Z)", text, re.S | re.M)
+    return m.group(0).strip() if m else None
+
+
 def gates_problem(phase: str) -> str | None:
     """Why this phase's pre-registered gates are not in force, or None when they are: the spec in the ops dir must
-    have a Gates section, and the same file must be committed in the repo's records folder (runbook step 0)."""
+    have a Gates section, and the same spec must be committed on HEAD in the repo's records folder with the same
+    Gates section (runbook step 0). Changing the gates in the ops dir without committing them is refused."""
     spec = OPS / "specs" / f"{phase}.md"
     if not spec.exists():
         return f"no spec at {spec}"
-    if "## Gates" not in spec.read_text():
+    local = gates_section(spec.read_text())
+    if local is None:
         return f"{spec.name} has no '## Gates' section (templates/spec.md)"
     repo = Path(CFG["project"]["repo"]).expanduser().resolve()
-    records = CFG["project"].get("records_dir", "")
-    rel = f"{records}/specs/{phase}.md" if records else f"specs/{phase}.md"
-    r = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"HEAD:{rel}"], capture_output=True, text=True)
+    records = CFG["project"].get("records_dir", "tools/swarm-records")
+    rel = f"{records}/specs/{phase}.md"
+    r = subprocess.run(["git", "-C", str(repo), "show", f"HEAD:{rel}"], capture_output=True, text=True)
     if r.returncode != 0:
         return f"the gates are not committed: copy the spec to {rel} in the repo and commit it on main"
+    if gates_section(r.stdout) != local:
+        return (f"the Gates in {spec.name} differ from the committed copy in {rel}: commit the new gates as an "
+                "amendment, or restore the committed ones")
     return None
 
 
