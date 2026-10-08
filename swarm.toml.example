@@ -42,6 +42,11 @@ records_dir = "tools/swarm-records"
 test_cmd = "pytest -q"
 lint_cmd = "ruff check ."
 
+# Set true when the repo holds anything that must not leave the machine (credentials, personal data,
+# private or client code). `swarm.py run` then refuses every model that does not set
+# trains_on_prompts = false, reviewers included. Off by default.
+sensitive = false
+
 [opencode]
 # Executable used for every `opencode run` / `opencode export` call. Point
 # this at a stub for tests (a small script that prints `--format json` lines
@@ -76,10 +81,13 @@ name = "GPT-6.1 Sol"
 
 # FREE, but the provider may train on prompts and code: NEVER use this model on sensitive data
 # (credentials, personal data, private or client code). Fine for public or throwaway work.
+# `trains_on_prompts` is the flag that `[project] sensitive = true` checks: set it to false only when the
+# provider's terms say prompts are not used for training. An unset flag counts as "may train".
 [[models]]
 key = "musefree"
 id = "opencode/muse-spark-1.3-contributor-free"
 name = "Muse Spark 1.3 Contributor (free)"
+trains_on_prompts = true
 # driver = "opencode"
 # role = "free tier: no sensitive data"
 
@@ -202,6 +210,16 @@ cache_read = 0.20
 cache_write_5m = 2.50
 cache_write_1h = 4
 name = "Sonnet 5"
+
+# Haiku 5.5 runs the scribe and the phase manager (see agents/claude). The numbers below are a
+# PLACEHOLDER copied from the Haiku 4.5 tier: replace them with Haiku 5.5's list prices before trusting `cost`.
+[claude.prices."claude-haiku-5-5"]
+in = 1
+out = 5
+cache_read = 0.10
+cache_write_5m = 1.25
+cache_write_1h = 2
+name = "Haiku 5.5"
 
 [claude.prices."claude-haiku-4-5"]
 in = 1
