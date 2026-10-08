@@ -20,15 +20,22 @@ Read `references/lessons.md` before a first run. It explains why the process loo
 | Role | Who | Does | Never does |
 |---|---|---|---|
 | Planner | The strongest model (the main session) | Project plan, phase specs, acceptance targets, `AGENTS.md`, launching phase managers, reading their reports, talking to the user | Coordinate a phase step by step, write feature code |
-| Phase manager | A mid-tier subagent, one per phase, fresh context | Everything in `references/runbook.md`: worktrees, launching workers, reviews, fix rounds, merge, play-test, dashboard | Write feature code or tests (tiny fixes only, and logged) |
+| Phase manager | A cheap-but-careful subagent, one per phase, fresh context (`agents/`) | Everything in `references/runbook.md`: gates, worktrees, launching workers, reviews, fix rounds, merge, play-test, report | Write feature code or tests (tiny fixes only, and logged); change a gate after seeing results |
+| Advisor | A stronger model the phase manager consults at a few decision points (optional) | Reviews a plan, a score, a finding, a merge or a triage question; read only | Make changes; run commands |
 | Checklist agent | A small, cheap subagent (optional) | Check that a fix list landed; mechanical verification | Make judgment calls |
 | Workers | 2–4 models from `[[models]]` | Implement tasks, write tests, fix their own review findings | Touch files outside their task, or anything outside their worktree |
 | Reviewers | Models that did not write the code | Read-only review in a detached worktree | Edit files |
 | Consensus / triage | A third model's run | Check every review claim against the code; diagnose stalled runs | Edit files |
 | Scribe | A cheap agent (any model, any CLI) on top of the `watch` timer | Reads what every other agent is doing and writes it to the board: summaries, trouble notes, unlogged Claude runs (`templates/prompts/scribe.md`) | Change code, files or task state |
 
-Under Claude Code the usual mapping is Opus as planner, Sonnet as phase manager and Haiku as checklist agent and
-scribe. Under another orchestrator, use its strongest model as planner and cheaper ones below it.
+Under Claude Code the usual mapping is Opus as planner, Haiku 5.5 as phase manager with a Sonnet 5.5 advisor, and
+Haiku 5.5 as scribe. Under OpenCode, use a strong model as planner, a mid-tier model as manager, a strong model as
+advisor (not a free tier, since it reads the whole question) and a cheap model as scribe. Setup below installs the
+agents.
+
+**Sensitive data:** set `[project] sensitive = true` in `swarm.toml` when the repo holds credentials, personal data
+or private code. Then `swarm.py run` refuses every model that does not set `trains_on_prompts = false`, reviewers
+included. Free tiers may train on prompts and code. Keep them off sensitive projects.
 
 **Cost rule:** the orchestrator's cost comes from how many tool calls it makes multiplied by how large its context
 is, and not from the workers. Keep the planner's turns few and short. Give each phase a fresh manager. Managers
@@ -58,7 +65,9 @@ agent-swarm/
                                phase, health, cost, status, claude, scan, agents, activity, log-run, site,
                                watch, push, export, sync, recover
   scripts/screenshot.py        Playwright screenshots, video and console errors from a JSON step list
-  scripts/tests/               driver tests (a fake Grok CLI stands in for the real one)
+  scripts/tests/               driver, board and sensitive-repo tests (a fake Grok CLI stands in for the real one)
+  agents/claude/               swarm-manager (Haiku 5.5), swarm-scribe (Haiku 5.5), swarm-advisor (Sonnet 5.5)
+  agents/opencode/             the same three for OpenCode; the model is a placeholder to fill in
   assets/dashboard.html        live dashboard and replay page (local, embedded replay, or claude.ai Artifact)
   references/runbook.md        the phase manager's step-by-step procedure (give it to every manager)
   references/lessons.md        what worked, what failed, the cost model, model track records
@@ -66,7 +75,8 @@ agent-swarm/
   references/grok-cli.md       Grok CLI headless usage, sandbox profile, gotchas
   references/dashboard.md      running the dashboard, pushing events, exporting the replay
   templates/AGENTS.md          worker rules (copy into the project repo root)
-  templates/spec.md            phase spec skeleton
+  templates/spec.md            phase spec skeleton (with pre-registered gates and amendments)
+  templates/report.md          the phase manager's final report
   templates/prompts/           manager-launch, test-author, task, review, review-tests, review-ui,
                                consensus, fix, triage, scribe
   docs/requirements.md         where the project is heading
@@ -90,7 +100,7 @@ agent-swarm/
    - `project.worktrees`: for example `<root>/<project>-wt`
    - `project.forbidden`: every directory that must never host a worker. Include the user's sensitive folders.
    - `project.test_cmd` and `project.lint_cmd`
-   - `[[models]]` (with `driver`) and `[[phases]]`
+   - `[[models]]` (with `driver`, and `trains_on_prompts` if `sensitive` is on) and `[[phases]]`
 4. **Phase 0 is the planner's own work**, because it sets the contracts everyone codes against:
    - the repo skeleton, venv and test harness
    - `AGENTS.md` from `templates/AGENTS.md`
@@ -104,19 +114,31 @@ agent-swarm/
    when it is done. Anything you do while such a task is `working` or `fixing` counts as your own work; the
    rest (writing specs, launching managers, waiting, reading reports) is orchestration and needs no task.
    With `[claude] session` set, the task card also shows your latest action, read from your transcript.
-5. **Dashboard:** start the local board (`swarm.py watch --serve 8765`, see below) so the user can watch from
+5. **Agents (Claude Code and OpenCode):** copy the manager, scribe and advisor agents into the project so the
+   planner can launch them by name:
+   - Claude Code: `cp <skill>/agents/claude/*.md <root>/<project>/.claude/agents/`. The model is pinned to
+     `claude-haiku-5-5` (manager, scribe) and `claude-sonnet-5-5` (advisor). If Claude Code rejects a full model id in
+     the frontmatter, change it to the alias `haiku` or `sonnet`. New agents load when the session restarts.
+   - OpenCode: `cp <skill>/agents/opencode/*.md <root>/<project>/.opencode/agents/`, then replace
+     `REPLACE_WITH_PROVIDER/MODEL` in each file with a model from your roster (`provider/model`). Check with
+     `opencode agent list`. The `permission` and `mode` fields follow the 1.18 agent format and need a check on the
+     first run.
+6. **Dashboard:** start the local board (`swarm.py watch --serve 8765`, see below) so the user can watch from
    the first phase.
 
 ## Running a phase
 
 1. **Planner:** write `specs/<phase>.md` from `templates/spec.md`. List the tasks, file ownership (one owner per
-   file), the acceptance targets as numbers, and which tasks get a bake-off. Keep it short and exact: every vague
-   line costs a review round.
-2. **Planner:** launch a phase manager with `templates/prompts/manager-launch.md`, filled in. It reads
-   `references/runbook.md` and runs the whole phase.
+   file), the acceptance targets as numbers, the gates (pass/fail thresholds, the bake-off rubric, the winner rule),
+   and which tasks get a bake-off. Keep it short and exact: every vague line costs a review round. Commit the gates
+   before any run.
+2. **Planner:** launch a phase manager with `templates/prompts/manager-launch.md`, filled in (its Merge, Advisor and
+   Sensitive lines say what the manager may do). Under Claude Code, start the `swarm-manager` agent; under OpenCode,
+   run it with `--agent swarm-manager`. It reads `references/runbook.md` and runs the whole phase.
 3. **Planner:** wait. Don't poll the manager or re-check its work step by step. When the report arrives:
    - check the pushed commit and the test count (one command)
    - run `swarm.py cost`, plus `swarm.py claude` if Claude agents took part
+   - read the report (`templates/report.md`): measured and inferred are listed apart, and the limits are named
    - relay the results to the user in a few lines
 4. **Repeat for the next phase.** Measurement tools for later phases (benchmarks, balance scripts) can be built
    early, in parallel, as separate tasks.
@@ -151,8 +173,8 @@ few minutes while a phase runs. It reads `swarm.py agents`, writes a one-line su
 (`swarm.py activity`), flags crashed, quiet or looping agents as feed notes, and logs finished Claude
 subagent runs nobody logged (`swarm.py log-run`). It never touches code, files or task status.
 
-- **Claude Code:** a Haiku subagent in the background with the filled-in prompt, relaunched every ~5 minutes
-  by the phase manager between its own steps (or `/loop 5m`).
+- **Claude Code:** the `swarm-scribe` agent (Haiku 5.5) in the background with the filled-in prompt, relaunched
+  every ~5 minutes by the phase manager between its own steps (or `/loop 5m`).
 - **OpenCode or Grok:** a headless run of a cheap model with the prompt, from a timer (cron, a shell loop),
   with its working directory set to the ops dir. It needs shell access for `swarm.py` only; give it a
   permission profile that allows `python3 <skill>/scripts/swarm.py` and nothing else that writes.
@@ -174,6 +196,11 @@ subagent runs nobody logged (`swarm.py log-run`). It never touches code, files o
   main checkout).
 - **Workers fix their own code** in their own session (`--session`). Anything the orchestrator edits in the
   product is logged with `swarm.py note "ORCHESTRATOR FIX: ..."`.
+- **Gates are fixed before a run.** Thresholds, the bake-off rubric and the winner rule are committed in the spec
+  before any worker starts. A later change is a dated entry under "Amendments", with its direction (conservative or
+  relaxed). A relaxed gate needs the user's approval.
+- **Sensitive repos run only no-training models.** With `[project] sensitive = true`, `run` refuses any model that
+  does not set `trains_on_prompts = false`. Don't work around it.
 - **Pushing to a remote, publishing, and other outward actions need the user's approval.** Say in the manager
   launch prompt exactly what is pre-approved.
 - **Never `pkill -f` a pattern:** it can kill the agent's own shell. Kill by pid.
