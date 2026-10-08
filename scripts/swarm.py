@@ -49,6 +49,7 @@ GROK_MAX_TURNS = 40
 GROK_REASONING_EFFORT = None
 GROK_SANDBOX = "swarm-worker"
 GROK_ALLOW_UNSANDBOXED = False
+SENSITIVE = False
 SESSION_DIR = Path.home() / ".claude" / "projects"
 CLAUDE_SESSION = ""
 CLAUDE_PRICES: dict = {}
@@ -119,7 +120,7 @@ def find_config(explicit: str | None) -> Path:
 def load_config(path: Path) -> None:
     global CFG, CONFIG_PATH, OPS, DATA, OUT, LOGS, EVENTS, LEDGER, MODELS, PHASES, WATCHDOG
     global OPENCODE_BIN, OPENCODE_AGENT, SESSION_DIR, CLAUDE_SESSION, CLAUDE_PRICES, CLAUDE_NAMES, DASHBOARD_URL
-    global GROK_BIN, GROK_MAX_TURNS, GROK_REASONING_EFFORT, GROK_SANDBOX, GROK_ALLOW_UNSANDBOXED
+    global GROK_BIN, GROK_MAX_TURNS, GROK_REASONING_EFFORT, GROK_SANDBOX, GROK_ALLOW_UNSANDBOXED, SENSITIVE
 
     CFG = tomllib.loads(path.read_text())
     CONFIG_PATH = path
@@ -128,8 +129,10 @@ def load_config(path: Path) -> None:
     LOGS, EVENTS, LEDGER = DATA / "logs", DATA / "events.jsonl", DATA / "ledger.jsonl"
 
     MODELS = {m["key"]: {"id": m["id"], "name": m["name"], "driver": m.get("driver", "opencode"),
-                          "role": m.get("role", "")}
+                          "role": m.get("role", ""), "trains_on_prompts": m.get("trains_on_prompts")}
               for m in CFG.get("models", [])}
+    # [project] sensitive = true: only models that explicitly set trains_on_prompts = false may run
+    SENSITIVE = bool(CFG.get("project", {}).get("sensitive", False))
     PHASES = CFG.get("phases", [])
 
     wd = CFG.get("watchdog", {})
@@ -378,6 +381,9 @@ def cmd_run(a):
                  "itself; log their runs with `swarm.py log-run`")
     if driver == "grok" and not GROK_SANDBOX and not GROK_ALLOW_UNSANDBOXED:
         sys.exit("grok driver needs a sandbox profile; set [grok] sandbox or allow_unsandboxed = true")
+    if SENSITIVE and model.get("trains_on_prompts") is not False:
+        sys.exit(f"refusing to run '{a.model}': [project] sensitive = true, and this model does not set "
+                 "trains_on_prompts = false (its provider may train on prompts and code)")
     kind = a.kind or ("fix" if a.session else "build")
     emit({"type": "task", "phase": a.phase, "task": a.task, "model": a.model,
           "status": "fixing" if kind == "fix" else "working"})
