@@ -375,21 +375,42 @@ def _grok_argv(a, model: dict, dir_path: Path, kind: str) -> tuple[list[str], Pa
     return cmd, prompt_tmp
 
 
-GATES_HEADING = re.compile(r"^## Gates(?=[ (]|$)", re.M)
+def spec_sections(text: str, name: str) -> list[str]:
+    """Every '## <name>' section of a spec, from its heading up to the next '## ' heading. A '## ' line inside a
+    fenced code block is content, not a heading."""
+    found: list[list[str]] = []
+    cur: list[str] | None = None
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("## "):
+            cur = [line] if re.match(rf"## {re.escape(name)}(?=[ (]|$)", line) else None
+            if cur is not None:
+                found.append(cur)
+            continue
+        if cur is not None:
+            cur.append(line)
+    return ["\n".join(sec).strip() for sec in found]
 
 
 def gates_section(text: str) -> str | None:
-    """The one '## Gates' section of a spec, up to the next '## ' heading. None when there is no Gates section;
-    ValueError when there are two, so a spec cannot carry two sets of gates."""
-    starts = list(GATES_HEADING.finditer(text))
-    if not starts:
+    """The one '## Gates' section of a spec, or None. ValueError when there are two."""
+    secs = spec_sections(text, "Gates")
+    if not secs:
         return None
-    if len(starts) > 1:
+    if len(secs) > 1:
         raise ValueError("more than one '## Gates' section")
-    start = starts[0].start()
-    nxt = re.search(r"^## ", text[starts[0].end():], re.M)
-    end = starts[0].end() + nxt.start() if nxt else len(text)
-    return text[start:end].strip()
+    return secs[0]
+
+
+def pinned_gates(text: str) -> tuple[str | None, str]:
+    """What is pinned in a spec: its Gates section and its Amendments section (empty when there is none). Both are
+    compared with the committed copy, so neither can change without a commit."""
+    amendments = spec_sections(text, "Amendments")
+    if len(amendments) > 1:
+        raise ValueError("more than one '## Amendments' section")
+    return gates_section(text), (amendments[0] if amendments else "")
 
 
 def gates_problem(phase: str) -> str | None:
@@ -400,10 +421,10 @@ def gates_problem(phase: str) -> str | None:
     if not spec.exists():
         return f"no spec at {spec}"
     try:
-        local = gates_section(spec.read_text())
+        local = pinned_gates(spec.read_text())
     except ValueError as e:
         return f"{spec.name}: {e}"
-    if local is None:
+    if local[0] is None:
         return f"{spec.name} has no '## Gates' section (templates/spec.md)"
     repo = Path(CFG["project"]["repo"]).expanduser().resolve()
     records = CFG["project"].get("records_dir", "tools/swarm-records")
@@ -412,12 +433,12 @@ def gates_problem(phase: str) -> str | None:
     if r.returncode != 0:
         return f"the gates are not committed: copy the spec to {rel} in the repo and commit it on main"
     try:
-        committed = gates_section(r.stdout)
+        committed = pinned_gates(r.stdout)
     except ValueError as e:
         return f"the committed {rel}: {e}"
     if committed != local:
-        return (f"the Gates in {spec.name} differ from the committed copy in {rel}: commit the new gates as an "
-                "amendment, or restore the committed ones")
+        return (f"the Gates or Amendments in {spec.name} differ from the committed copy in {rel}: commit the new "
+                "text on main first, or restore the committed one")
     return None
 
 

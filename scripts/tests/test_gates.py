@@ -155,6 +155,23 @@ class GateCheck(unittest.TestCase):
         self.assertIn("not committed", msg)
         self.assertFalse(reached)
 
+    def test_fenced_heading_does_not_end_the_gates_section(self):
+        fenced = ("# Phase p1\n\n## Gates (pre-registered)\n- measure:\n```\n## Tasks\npytest -q\n```\n"
+                  "- threshold: 1 test\n")
+        setup(self.tmp, "true", fenced, True)
+        (self.tmp / "ops" / "specs" / "p1.md").write_text(fenced.replace("1 test", "0 tests"))
+        msg, reached = try_run()
+        self.assertIn("differ", msg)
+        self.assertFalse(reached)
+
+    def test_uncommitted_amendment_is_refused(self):
+        base = GATES + "\n## Amendments\n- none yet\n"
+        setup(self.tmp, "true", base, True)
+        (self.tmp / "ops" / "specs" / "p1.md").write_text(base.replace("none yet", "2026-10-08: relaxed threshold"))
+        msg, reached = try_run()
+        self.assertIn("differ", msg)
+        self.assertFalse(reached)
+
     def test_default_records_dir_matches_sync(self):
         setup(self.tmp, "true", GATES, True)
         text = (self.tmp / "ops" / "swarm.toml").read_text().replace('records_dir = "records"\n', "")
