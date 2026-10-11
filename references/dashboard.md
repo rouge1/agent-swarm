@@ -27,21 +27,16 @@
   phases currently in the stack; click a cell to focus that phase, or drag the window along the map and
   the stack follows, card by card, with the cards sliding into place
 - **task board** for the focused phase: queued, in progress, in review, done
-- **worker lanes**: the orchestrator plus one lane per model, with live "doing"/idle status and that lane's
-  totals for the focused phase. The orchestrator lane tells work from orchestration: while the orchestrator
-  holds a task of its own (`swarm.py task ... --model orchestrator`, `working` or `fixing`) it reads
-  "Building <task>", like any worker; otherwise, while a `crew orchestrator busy` event says so or (for a Claude
-  orchestrator) its transcript tally changed in the last 5 minutes, it reads "Orchestrating". Its spend is
-  split the same way: the tally logs what part of the orchestrator's total fell inside its own tasks
-  (`work_messages`, `work_output`, `work_cost` on its `claude` event), shown as "own work $x" under its cost
 - **spend**: the all-phases table (non-Claude workers, then Claude orchestrator + subagents); per-phase spend
-  lives in the wheel's chevron instead of a scope toggle here
+  lives in the wheel's chevron instead of a scope toggle here. Click a worker's name to expand its
+  metadata (model id, driver, role) and its per-phase runs/wall/tokens/cost breakdown; the choice is
+  remembered in the browser
 - the activity feed
 - a replay player: Space plays or pauses, 1/2/3 set the speed, ←/→ step, Home/End jump, `[`/`]` shift the wheel's
   focused phase, R restarts. During replay the focused phase follows the replayed current phase unless you've
   moved away (L or End brings the focus back to the current phase).
 
-**What each agent is doing.** A working task's card, and its worker's lane, show two lines: the scribe's
+**What each agent is doing.** A working task's card shows two lines: the scribe's
 summary in plain words, and underneath it the agent's latest action (`now: bash · pytest -q`, with how long
 it has been going once that passes two minutes). Both come from `activity` events: `swarm.py scan` (run by
 every `watch` pass) reads the run log of each `swarm.py run` still going (Grok and OpenCode workers) and the

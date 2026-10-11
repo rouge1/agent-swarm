@@ -250,13 +250,22 @@ def current_phase(events: list[dict]) -> str:
 
 
 def session_metrics(session_id: str, since_ms: int) -> dict:
-    """Cost, tokens and model time for assistant messages created since `since_ms`."""
+    """Cost, tokens and model time for assistant messages created since `since_ms`.
+
+    Supports opencode v1 (`export <id>` → messages with info.role/tokens) and
+    v2 (`session export <id>` → messages with type/time/cost/tokens).
+    """
     LOGS.mkdir(parents=True, exist_ok=True)
     # stdout to a pipe is truncated at ~64 KB by opencode; a file is not
     tmp = LOGS / f"export-{session_id}.json"
     with open(tmp, "w") as f:
-        subprocess.run([OPENCODE_BIN, "export", session_id], stdout=f, stderr=subprocess.DEVNULL,
-                        cwd=tempfile.gettempdir())
+        r = subprocess.run([OPENCODE_BIN, "session", "export", session_id],
+                           stdout=f, stderr=subprocess.DEVNULL,
+                           cwd=tempfile.gettempdir())
+        if r.returncode != 0:
+            with open(tmp, "w") as f2:
+                subprocess.run([OPENCODE_BIN, "export", session_id], stdout=f2,
+                               stderr=subprocess.DEVNULL, cwd=tempfile.gettempdir())
     raw = tmp.read_text()
     tmp.unlink()
     start = raw.find("{")
@@ -265,18 +274,34 @@ def session_metrics(session_id: str, since_ms: int) -> dict:
          "model_s": 0.0, "messages": 0, "files_changed": 0}
     for msg in data.get("messages", []):
         info = msg.get("info", {})
-        if info.get("role") != "assistant" or info.get("time", {}).get("created", 0) < since_ms:
-            continue
-        t = info.get("tokens", {})
-        m["cost"] += info.get("cost", 0.0) or 0.0
-        m["tokens_in"] += t.get("input", 0)
-        m["tokens_out"] += t.get("output", 0)
-        m["tokens_reasoning"] += t.get("reasoning", 0)
-        m["cache_read"] += t.get("cache", {}).get("read", 0)
-        tm = info.get("time", {})
-        if tm.get("completed"):
-            m["model_s"] += (tm["completed"] - tm["created"]) / 1000
-        m["messages"] += 1
+        if info:
+            # v1 shape
+            if info.get("role") != "assistant" or info.get("time", {}).get("created", 0) < since_ms:
+                continue
+            t = info.get("tokens", {})
+            m["cost"] += info.get("cost", 0.0) or 0.0
+            m["tokens_in"] += t.get("input", 0)
+            m["tokens_out"] += t.get("output", 0)
+            m["tokens_reasoning"] += t.get("reasoning", 0)
+            m["cache_read"] += t.get("cache", {}).get("read", 0)
+            tm = info.get("time", {})
+            if tm.get("completed"):
+                m["model_s"] += (tm["completed"] - tm["created"]) / 1000
+            m["messages"] += 1
+        else:
+            # v2 shape: {type, time.created, cost, tokens{input,output,reasoning,cache{read}}}
+            if msg.get("type") != "assistant" or msg.get("time", {}).get("created", 0) < since_ms:
+                continue
+            t = msg.get("tokens", {}) or {}
+            m["cost"] += msg.get("cost", 0.0) or 0.0
+            m["tokens_in"] += t.get("input", 0)
+            m["tokens_out"] += t.get("output", 0)
+            m["tokens_reasoning"] += t.get("reasoning", 0)
+            m["cache_read"] += (t.get("cache", {}) or {}).get("read", 0)
+            tm = msg.get("time", {}) or {}
+            if tm.get("completed"):
+                m["model_s"] += (tm["completed"] - tm["created"]) / 1000
+            m["messages"] += 1
     m["files_changed"] = data.get("info", {}).get("summary", {}).get("files", 0)
     m["cost"] = round(m["cost"], 6)
     m["model_s"] = round(m["model_s"], 1)
@@ -479,7 +504,10 @@ def cmd_run(a):
         a._files_before = (base, files) if files is not None else None
     else:
         prompt = Path(a.prompt_file).read_text() if a.prompt_file else a.prompt
-        cmd = [OPENCODE_BIN, "run", "--format", "json", "-m", model["id"], "--dir", str(dir_path),
+        # opencode v2 removed `run --dir`; the worker's directory comes from
+        # this process's cwd (set to dir_path below). Swarm-level worktree
+        # safety (check_worktree_safety) is unchanged.
+        cmd = [OPENCODE_BIN, "run", "--format", "json", "-m", model["id"],
                "--title", f"{a.phase}/{a.task}/{a.model}"]
         if OPENCODE_AGENT:
             cmd += ["--agent", OPENCODE_AGENT]

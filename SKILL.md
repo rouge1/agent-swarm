@@ -165,14 +165,15 @@ In a bake-off, read both diffs before picking a winner: hidden acceptance tests 
 
 ## Dashboard
 
-`assets/dashboard.html` shows the phases as an overlapping card stack, the task board, worker lanes, spend and
+`assets/dashboard.html` shows the phases as an overlapping card stack, the task board, spend (click a
+worker name to expand its model/driver metadata and per-phase breakdown) and
 the activity feed, live or as a replay. It needs no service: `swarm.py watch --serve 8765` rewrites the page,
 `meta.json` and `events.json` in `out/site/` every 30 seconds and serves that folder on this machine only
 (127.0.0.1); the page polls the two files every 5 seconds. `swarm.py site` writes the folder once. `swarm.py
 export` writes a single offline replay file to share, and a claude.ai Artifact board is also supported. See
 `references/dashboard.md`.
 
-Task cards and worker lanes also show what each working agent is doing. `watch` scans every in-flight
+Task cards show what each working agent is doing (via `activity` events). `watch` scans every in-flight
 agent's own log each pass (Grok and OpenCode run logs, Claude subagent transcripts) and logs its latest
 action. For Claude subagents to be found, start each one's description with `[<phase>:<task>]`.
 
