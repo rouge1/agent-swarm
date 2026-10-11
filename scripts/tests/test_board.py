@@ -112,7 +112,7 @@ class SiteTest(BoardTestBase):
         self.assertIn("<title>", head)  # the page's own title moved into the head
         self.assertEqual(json.loads((site / "meta.json").read_text())["name"], "Board · Test")
         self.assertEqual(json.loads((site / "events.json").read_text())[0]["type"], "phase")
-        self.assertEqual(sorted(p.name for p in site.iterdir()), ["events.json", "index.html", "meta.json"])
+        self.assertEqual(sorted(p.name for p in site.iterdir()), ["events.json", "fonts", "index.html", "meta.json"])
 
     def test_site_out_dir(self):
         out = self.tmp / "elsewhere"
