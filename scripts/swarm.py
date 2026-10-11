@@ -519,10 +519,13 @@ def cmd_run(a):
     t0 = time.monotonic()
     timed_out = False
     with open(log, "w") as lf:
+        # opencode v2 resolves the project directory from $PWD, not the process cwd:
+        # Popen(cwd=...) alone leaves a stale PWD behind (usually the ops dir) and the
+        # worker lands there. Sync PWD into the child's env and drop OLDPWD.
+        child_env = {**os.environ, "PWD": str(dir_path), **(env_extra or {})}
+        child_env.pop("OLDPWD", None)
         popen_kwargs = dict(stdout=lf, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                             cwd=str(dir_path))
-        if env_extra:
-            popen_kwargs["env"] = {**os.environ, **env_extra}
+                             cwd=str(dir_path), env=child_env)
         proc = subprocess.Popen(cmd, **popen_kwargs)
         branch = (_git_out(dir_path, "rev-parse", "--abbrev-ref", "HEAD") or "").strip()
         emit({"type": "run_start", "phase": a.phase, "task": a.task, "model": a.model,
