@@ -1297,6 +1297,13 @@ def write_site(site: Path) -> None:
     site.mkdir(parents=True, exist_ok=True)
     _write_atomic(site / "meta.json", json.dumps(build_meta(), separators=(",", ":")))
     _write_atomic(site / "events.json", json.dumps(load_events(), separators=(",", ":")))
+    fonts = SKILL_DIR / "assets" / "fonts"   # vendored: the board makes no request to Google
+    if fonts.is_dir():
+        (site / "fonts").mkdir(exist_ok=True)
+        for f in fonts.iterdir():
+            dst = site / "fonts" / f.name
+            if f.is_file() and (not dst.exists() or dst.stat().st_size != f.stat().st_size):
+                shutil.copy2(f, dst)
     page = (SKILL_DIR / "assets" / "dashboard.html").read_text(encoding="utf-8")
     title = re.match(r"\s*(<title>.*?</title>)", page, re.S)  # the page's title belongs in the head
     head = SITE_HEAD.replace("</head>", (title.group(1) if title else "") + "</head>")
@@ -1313,19 +1320,40 @@ def cmd_site(a):
     print(f"site written to {site}")
 
 
-def _serve(site: Path, port: int, bind: str) -> None:
-    """Serve the board folder from a daemon thread (stdlib only, no request logging)."""
+def _make_server(handler, port: int, bind: str, tries: int = 50):
+    """Bind the board server. Port 0 asks the OS for a free port; a busy or blocked port moves on to the next
+    one (up to `tries` of them) and then to an OS-chosen one, so the board always comes up somewhere."""
+    from http.server import ThreadingHTTPServer
+    candidates = [port + i for i in range(tries)] if port else []
+    for p in candidates + [0]:
+        try:
+            return ThreadingHTTPServer((bind, p), handler)
+        except OSError:  # in use, or not allowed to bind it
+            continue
+    raise OSError(f"no free port to serve the board on {bind}")
+
+
+def _serve(site: Path, port: int, bind: str) -> int:
+    """Serve the board folder from a daemon thread (stdlib only, no request logging); returns the port bound."""
     import functools
     import threading
-    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    from http.server import SimpleHTTPRequestHandler
 
     class Quiet(SimpleHTTPRequestHandler):
         def log_message(self, *args):
             pass
 
-    httpd = ThreadingHTTPServer((bind, port), functools.partial(Quiet, directory=str(site)))
+    httpd = _make_server(functools.partial(Quiet, directory=str(site)), port, bind)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    print(f"serving {site} at http://{bind}:{httpd.server_port}/", flush=True)
+    url = f"http://{bind}:{httpd.server_port}/"
+    note = "" if httpd.server_port == port else f" (port {port} was busy or blocked)" if port else ""
+    print(f"serving {site} at {url}{note}", flush=True)
+    try:
+        OUT.mkdir(parents=True, exist_ok=True)
+        _write_atomic(OUT / "board.url", url + "\n")  # for the orchestrator: where the board actually is
+    except OSError:
+        pass
+    return httpd.server_port
 
 
 def watch_pass(site: Path, tally: bool) -> None:
@@ -1669,7 +1697,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("watch", help="refresh the standalone board on a timer, optionally serving it")
     s.add_argument("--every", type=float, default=30, help="seconds between passes (default 30)")
     s.add_argument("--out", help="board folder (default: <ops>/out/site)")
-    s.add_argument("--serve", type=int, metavar="PORT", help="also serve the folder on this port")
+    s.add_argument("--serve", type=int, nargs="?", const=0, metavar="PORT",
+                   help="also serve the folder; a busy or blocked PORT moves to the next free one, 0 or no value = any free port (the URL is printed and written to <ops>/out/board.url)")
     s.add_argument("--bind", default="127.0.0.1", help="address for --serve (default 127.0.0.1, this machine only)")
     s.add_argument("--no-claude", action="store_true", help="skip the Claude transcript tally")
     s.add_argument("--once", action="store_true", help="one pass, then exit")
