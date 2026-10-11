@@ -124,7 +124,8 @@ agent-swarm/
    planner can launch them by name:
    - Claude Code: `mkdir -p <root>/<project>/.claude/agents && cp <skill>/agents/claude/*.md <root>/<project>/.claude/agents/`. The model is pinned to
      `claude-haiku-5-5` (manager, scribe) and `claude-sonnet-5-5` (advisor). If Claude Code rejects a full model id in
-     the frontmatter, change it to the alias `haiku` or `sonnet`. New agents load when the session restarts.
+     the frontmatter, use the alias `sonnet` for the advisor. Never use the alias `haiku` for the manager or scribe: it
+     is Haiku 4.5. If the full Haiku 5.5 id is refused, leave the manager and scribe on the full id and report it. New agents load when the session restarts.
    - OpenCode: `mkdir -p <root>/<project>/.opencode/agents && cp <skill>/agents/opencode/*.md <root>/<project>/.opencode/agents/`, then replace
      `REPLACE_WITH_PROVIDER/MODEL` in each file with a model from your roster (`provider/model`). Check with
      `opencode agent list`. The `permission` and `mode` fields follow the 1.18 agent format and need a check on the
@@ -186,7 +187,9 @@ few minutes while a phase runs. It reads `swarm.py agents`, writes a one-line su
 subagent runs nobody logged (`swarm.py log-run`). It never touches code, files or task status.
 
 - **Claude Code:** the `swarm-scribe` agent (Haiku 5.5) in the background with the filled-in prompt, relaunched
-  every ~5 minutes by the phase manager between its own steps (or `/loop 5m`).
+  every ~5 minutes by the phase manager between its own steps (or `/loop 5m`). A scribe run launched by hand with the
+  Agent tool uses `model: "sonnet"` (Sonnet 5.5) or the full Haiku 5.5 id when the tool can select it, never the `haiku`
+  alias, which is Haiku 4.5.
 - **Scribe memory:** a timer run starts fresh and cannot see what it logged before. Pass the last few `swarm.py agents`
   lines and the recent `activity` entries in its prompt so it does not log the same summary twice.
 - **OpenCode:** `opencode run --agent swarm-scribe` on a timer, launched from the project repo root (where
