@@ -63,7 +63,7 @@ OpenCode runs cost cents.
 | `... --text-out data/research/<f>.md --kind research` | A Grok run that can read the repo and search the web but not edit or run anything; see `grok-cli.md` "Web access" |
 | Claude subagent workers (`driver = "claude"`) | Start the subagent's description with `[<phase>:<task>]` (add `:<model>` in a bake-off) so the board can show what it is doing; set its task to `working`, and when it finishes `swarm.py log-run <phase> <task> <model> --wall S [--exit C] [--outcome ..] [--reason ..]` |
 | `swarm.py agents` | Every agent working now and its last few actions (tool calls, answer text) |
-| `swarm.py task <phase> <task> <queued\|working\|review\|fixing\|merged\|failed\|dropped> [--model m] [--note ..]` | Update a task card (`run` sets working/review itself) |
+| `swarm.py task <phase> <task> <queued\|working\|review\|fixing\|merged\|failed\|dropped> [--model m] [--note ..]` | Update a task card (`run` sets working/review itself). Always pass `--model`: a model-less card shows as "Orchestrator" and stays queued. For a bake-off, queue one card per model |
 | `swarm.py note "<text>"` | Add a line to the activity feed |
 | `swarm.py score <phase> <task> <model> <0-100> --summary ".."` | Bake-off score |
 | `swarm.py phase <phase> active\|done\|deferred` | Phase state; `deferred` = moving on with the exit criterion not met yet (mark it `done` when it is) |
