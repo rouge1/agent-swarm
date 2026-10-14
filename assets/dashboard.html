@@ -195,6 +195,7 @@ header.top { display: flex; flex-wrap: wrap; align-items: center; justify-conten
 .now .act { color: var(--muted); font-family: var(--mono); font-size: 10.5px; overflow-wrap: anywhere; }
 .now .flag { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--warn); }
 .now .flag.crashed { color: var(--bug); }
+.card .age { justify-self: end; font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .own { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; }
 .card.dropped { opacity: .6; }
 .card.failed { border-color: var(--bug); }
@@ -586,9 +587,15 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
   // a working agent's summary and latest action, with how long the action has been going when it's a while
   function nowHtml(t, T) {
     if (!["working", "fixing"].includes(t.status) || !(t.doing || t.say || t.flag)) return "";
-    const age = t.doing ? (T - t.doing.t) / 1000 : 0;
     const flag = t.flag ? `<span class="flag ${t.flag.state}">${t.flag.state === "crashed" ? "crashed · run lost" : "quiet"} for ${fmtS(Math.max(0, (T - t.flag.since) / 1000))}</span>` : "";
-    return `<div class="now">${flag}${t.say ? `<span class="say">${esc(t.say.text)}</span>` : ""}${t.doing ? `<span class="act">now: ${esc(t.doing.text)}${age >= 120 ? ` · ${fmtS(age)}` : ""}</span>` : ""}</div>`;
+    return `<div class="now">${flag}${t.say ? `<span class="say">${esc(t.say.text)}</span>` : ""}${t.doing ? `<span class="act">now: ${esc(t.doing.text)}</span>` : ""}</div>`;
+  }
+
+  // how long the current action has been going, shown in the card's bottom-right corner once it's a while
+  function ageHtml(t, T) {
+    if (!["working", "fixing"].includes(t.status) || !t.doing) return "";
+    const age = (T - t.doing.t) / 1000;
+    return age >= 120 ? `<div class="age">${fmtS(age)}</div>` : "";
   }
 
   function renderWheel(s, phases, view, curId, T) {
@@ -750,6 +757,7 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
         ${bits.length ? `<div class="row num">${bits.join(" · ")}</div>` : ""}
         ${t.note ? `<div class="row">${esc(t.note)}</div>` : ""}
         ${nowHtml(t, T)}
+        ${ageHtml(t, T)}
       </div>`;
     }
 
