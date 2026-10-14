@@ -408,7 +408,12 @@ kbd { font: 500 10.5px var(--mono); border: 1px solid var(--line); border-bottom
           s.phases[e.phase] = { status: e.status, t: prev?.t ?? e.t, end: e.status === "done" || e.status === "deferred" ? e.t : undefined };
           if (e.status === "active") s.cur = e.phase; break;
         }
-        case "task": { const t = task(); if (e.status !== t.status) { t.since = e.t; t.doing = t.say = t.flag = null; } t.status = e.status; if (e.title) t.title = e.title; if ("note" in e) t.note = e.note; break; }
+        case "task": {
+          // a status with no model cannot say which worker it is for: once the phase has real cards for that task,
+          // skip it; a real card replaces any model-less placeholder (a task registered before its worker ran)
+          if (!e.model && [...s.tasks.values()].some((x) => x.phase === e.phase && x.task === e.task && x.model)) break;
+          if (e.model) s.tasks.delete(`${e.phase}/${e.task}/`);
+          const t = task(); if (e.status !== t.status) { t.since = e.t; t.doing = t.say = t.flag = null; } t.status = e.status; if (e.title) t.title = e.title; if ("note" in e) t.note = e.note; break; }
         case "run": {
           const t = task(); const rerun = t.runs > 0 ? 1 : 0, bad = runFailed(e) ? 1 : 0;
           t.runs++; t.reruns += rerun; t.failed += bad; t.fixes += e.kind === "fix"; t.cost += e.cost || 0; t.wall += e.wall_s || 0;
