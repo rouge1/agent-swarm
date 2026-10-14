@@ -95,6 +95,7 @@ Read its trouble notes in `swarm.py agents` / the feed like any other signal; cr
 
 ### 0. Gates
 - You (the manager) copy `specs/<phase>.md` into the repo's records folder (`<repo>/<records_dir>/specs/`), then commit its "Gates" section (targets, thresholds, the bake-off rubric and the winner rule) on main before step 1. The ops directory is not versioned, so the commit is what fixes the gates. No worker runs before that commit.
+- Then mark the phase active: `python3 <skill>/scripts/swarm.py --config <ops>/swarm.toml phase <phase> active`. The board's task view shows only the active phase, so without this the phase's tasks do not appear on it. Mark it `done` at the end.
 
 ### 1. Tests first
 - `wt <phase> tests`. One **test author** (any driver in the roster) writes the contracts and acceptance tests from the spec, using

@@ -18,6 +18,8 @@ Dashboard: <"local board, already refreshed by `swarm.py watch`: nothing to do" 
 Scribe: <"run the swarm-scribe agent (Claude) or `opencode run --agent swarm-scribe` (OpenCode) about every 5 minutes while workers run, with <OPS>/prompts/scribe.md"
 | "none: the watch timer only">.
 
+Phase state: run `python3 <skill>/scripts/swarm.py --config <ops>/swarm.toml phase <phase> active` before your first run (the board shows only the active phase's tasks), and `phase <phase> done` at the end.
+
 Merge: <"you merge --no-ff on main when the phase is done" | "do not merge: hand the merge list (branches and tips) to the planner">.
 
 Advisor: <"consult <advisor model> at the runbook's advisor points (send it the question and the file paths)" | "none">.
