@@ -216,6 +216,10 @@ session_dir = "~/.claude/projects/-path-to-repo"
 # dir's log -- useful when you don't want to hardcode a session id.
 session = ""
 
+# Optional: skip Claude messages older than this (epoch milliseconds). Use it when a long session predates the
+# phase, so its earlier messages are not charged to PHASES[0]. 0 (default) = count everything.
+# since_ms = 1760000000000
+
 # $ per million tokens (Anthropic list prices): in, out, cache_read,
 # cache_write_5m, cache_write_1h, plus a display name. Used for reporting
 # only -- on a Claude subscription these tokens aren't billed per-token.

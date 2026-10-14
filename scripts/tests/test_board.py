@@ -456,6 +456,13 @@ class OrchestratorWorkTest(BoardTestBase):
         self.assertEqual(changed, 1)
         self.assertEqual(swarm.claude_tally("sess1")[1], 0)  # nothing new: not logged again
 
+    def test_since_ms_skips_messages_older_than_the_cutoff(self):
+        self.put({"t": self.at("2026-09-27T10:00:00Z"), "type": "phase", "phase": "p1", "status": "active"})
+        self.transcript("sess1", ["2026-09-27T10:00:00Z", "2026-09-27T10:10:00Z", "2026-09-27T10:20:00Z"])
+        with unittest.mock.patch.object(swarm, "CLAUDE_SINCE_MS", self.at("2026-09-27T10:05:00Z")):
+            swarm.claude_tally("sess1")
+        self.assertEqual(self.events("claude")[-1]["messages"], 2)  # the 10:00 message is before the cutoff
+
     def test_no_work_fields_without_an_orchestrator_task(self):
         self.put({"t": 1, "type": "phase", "phase": "p1", "status": "active"})
         self.transcript("sess1", ["2026-09-27T10:05:00Z"])

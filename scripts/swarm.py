@@ -53,6 +53,7 @@ SENSITIVE = False
 REQUIRE_GATES = False
 SESSION_DIR = Path.home() / ".claude" / "projects"
 CLAUDE_SESSION = ""
+CLAUDE_SINCE_MS = 0
 CLAUDE_PRICES: dict = {}
 CLAUDE_NAMES: dict = {}
 DASHBOARD_URL = ""
@@ -120,7 +121,7 @@ def find_config(explicit: str | None) -> Path:
 
 def load_config(path: Path) -> None:
     global CFG, CONFIG_PATH, OPS, DATA, OUT, LOGS, EVENTS, LEDGER, MODELS, PHASES, WATCHDOG
-    global OPENCODE_BIN, OPENCODE_AGENT, SESSION_DIR, CLAUDE_SESSION, CLAUDE_PRICES, CLAUDE_NAMES, DASHBOARD_URL
+    global OPENCODE_BIN, OPENCODE_AGENT, SESSION_DIR, CLAUDE_SESSION, CLAUDE_SINCE_MS, CLAUDE_PRICES, CLAUDE_NAMES, DASHBOARD_URL
     global GROK_BIN, GROK_MAX_TURNS, GROK_REASONING_EFFORT, GROK_SANDBOX, GROK_ALLOW_UNSANDBOXED, SENSITIVE, REQUIRE_GATES
 
     CFG = tomllib.loads(path.read_text())
@@ -156,6 +157,7 @@ def load_config(path: Path) -> None:
     claude = CFG.get("claude", {})
     SESSION_DIR = Path(claude.get("session_dir", "~/.claude/projects")).expanduser()
     CLAUDE_SESSION = claude.get("session", "")
+    CLAUDE_SINCE_MS = int(claude.get("since_ms", 0))  # ignore Claude messages older than this
     CLAUDE_PRICES, CLAUDE_NAMES = {}, {}
     for key, pr in claude.get("prices", {}).items():
         CLAUDE_PRICES[key] = (pr["in"], pr["out"], pr["cache_read"], pr["cache_write_5m"], pr["cache_write_1h"])
@@ -1512,6 +1514,8 @@ def claude_tally(session: str) -> tuple[dict, int] | None:
     for role, path in sources:
         for m in _read_transcript(path):
             ms = int(datetime.fromisoformat(m["t"].replace("Z", "+00:00")).timestamp() * 1000)
+            if ms < CLAUDE_SINCE_MS:
+                continue
             key = _price_key(m["model"])
             u = m["u"]
             cc = u.get("cache_creation") or {}
