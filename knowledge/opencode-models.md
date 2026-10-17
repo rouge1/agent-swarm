@@ -78,7 +78,7 @@ Results of the 2026-10 bake-offs (two small implementation tasks and one seeded-
 | Model | `id` | Use it for | Notes |
 |---|---|---|---|
 | GPT-6.1 Sol | `openrouter/openai/gpt-6.1-sol` | The default worker | Clean on both tasks at about $0.10 and 80 s. Its `max` reasoning variant cost 2.4x for the same result |
-| Muse Spark 1.3 Contributor (free) | `opencode/muse-spark-1.3-contributor-free` | Routine work and review on **public or throwaway code only** | Matched Sol at $0, but the provider may train on prompts and code. **Never** give it credentials, personal data, or private or client code |
+| Muse Spark 1.3 Contributor (free) | `openrouter/meta/muse-spark-1.3-contributor` | Routine work and review on **public or throwaway code only** | Matched Sol at $0, but the provider may train on prompts and code. **Never** give it credentials, personal data, or private or client code |
 | DeepSeek V4.1 Flash | `openrouter/deepseek/deepseek-v4.1-flash` | Cheapest worker (about $0.05), triage, tasks with a tight test net | Missed one narrow semver feature. Slowest range: 76-300 s |
 | Claude Sonnet 5.5 (via OpenRouter) | | Review | 9 of 9 seeded bugs at $0.07 and 22 s. It labels nearly everything `[high]`, so ignore its severity |
 | Claude Opus 5.5 (via OpenRouter) | | Planning, not generation | Correct but about 3x Sol's cost |
