@@ -28,7 +28,7 @@ name = "GPT-6.1 Sol"                      # display name on the board and in rep
 ```
 
 - **`id` is `provider/model`.** Two providers are in use: `openrouter/...` (OpenRouter, needs your OpenRouter key
-  configured in OpenCode) and `opencode/...` (OpenCode's own hosted models, such as the free Muse).
+  configured in OpenCode) and `opencode/...` (OpenCode's own hosted models; `opencode models` lists both).
 - **Check the id before a phase** with a one-line run. A wrong id wastes a worktree and a watchdog timeout.
 - **Optional `[opencode]` settings:** `bin` (the executable, or a stub for tests) and `agent` (passes `--agent <name>`
   on every run; unset uses OpenCode's default agent).
