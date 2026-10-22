@@ -91,6 +91,8 @@ name = "GPT-6.1 Sol"
 # With [project] sensitive = true, a model without this flag is refused: at least one model must set it.
 # driver = "opencode"
 # role = ""
+# agent = "swarm-research"   # OpenCode only: run this model with that agent (wins over [opencode] agent).
+#                              For a web research model (`:online` id); see references/opencode-cli.md.
 
 # FREE, but the provider may train on prompts and code: NEVER use this model on sensitive data
 # (credentials, personal data, private or client code). Fine for public or throwaway work.

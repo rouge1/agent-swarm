@@ -30,3 +30,22 @@ Verified with OpenCode 1.18 using the OpenRouter provider.
   one-line run before a phase.
 - **Workers can't message Claude.** Claude starts every exchange and reads the output or the `--text-out` file.
 - **OpenCode doesn't create worktrees.** `swarm.py wt` does.
+
+## Web research (OpenCode 2.0)
+
+OpenCode's own `websearch` tool needs a search provider key (Exa, Tavily, Firecrawl, Parallel, TinyFish or
+OpenCode's), and fails as "cancelled" without one. `webfetch` works with none. For search, use OpenRouter's web
+plugin: the model id with `:online` (for example `openrouter/meta/muse-spark-1.3-contributor:online`), declared
+once under `provider.openrouter.models` in `~/.config/opencode/opencode.jsonc`. It is billed by OpenRouter per
+search, on top of the model (a free model is no longer free). Checked 2026-10-22: a cited answer from search
+plus `webfetch`.
+
+Give such a model a read-only agent, because web pages are untrusted text: copy
+`agents/opencode/swarm-research.md` to `~/.config/opencode/agents/` (edit, shell and subagents denied, web
+reading allowed) and set `agent = "swarm-research"` on that `[[models]]` entry. A model's `agent` wins over
+`[opencode] agent`. Check with `opencode debug agents`. Without that agent, `--kind research` on an OpenCode
+model is only a label: the default `build` agent may run any shell command.
+
+`opencode run` waits on stdin when it is a terminal: give it `< /dev/null` when testing by hand (`swarm.py run`
+already does).
+

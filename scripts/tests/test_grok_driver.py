@@ -444,6 +444,32 @@ class TestOpencodeBranchUnchanged(GrokDriverTestBase):
         # driver defaults to "opencode" and process actually ran the fake opencode binary
         rec = self.last_ledger()
         self.assertEqual(rec["model"], "sonnetw2")
+        # no agent anywhere: none is passed
+        self.assertNotIn("--agent", oc_argv)
+
+    def test_model_agent_is_passed_and_wins_over_the_global_one(self):
+        self.load()
+        cfg_path = self.ops / "swarm.toml"
+        cfg_path.write_text(cfg_path.read_text().replace(
+            '[[models]]\nkey = "sonnetw"\nid = "claude-sonnet-5"\nname = "Sonnet"\ndriver = "claude"\n',
+            '[[models]]\nkey = "sonnetw"\nid = "claude-sonnet-5"\nname = "Sonnet"\ndriver = "claude"\n\n'
+            '[[models]]\nkey = "web"\nid = "openrouter/some-model:online"\nname = "Web"\nagent = "swarm-research"\n'
+        ))
+        swarm.load_config(cfg_path)
+        old = swarm.OPENCODE_AGENT
+        swarm.OPENCODE_AGENT = "build-agent"
+        try:
+            a = swarm.build_parser().parse_args(
+                ["run", "b1", "t1", "web", "--dir", str(self.wt), "--prompt", "hi", "--kind", "research"])
+            with mock.patch.dict(os.environ, {"FAKE_OPENCODE_CAPTURE": str(self.opencode_capture)}):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    swarm.cmd_run(a)
+        finally:
+            swarm.OPENCODE_AGENT = old
+        oc_argv = json.loads(self.opencode_capture.read_text())
+        i = oc_argv.index("--agent")
+        self.assertEqual(oc_argv[i + 1], "swarm-research")
+        self.assertEqual(oc_argv[oc_argv.index("-m") + 1], "openrouter/some-model:online")
 
 
 class TestCostStatusToleratesNullCost(GrokDriverTestBase):

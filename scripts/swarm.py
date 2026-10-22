@@ -131,7 +131,8 @@ def load_config(path: Path) -> None:
     LOGS, EVENTS, LEDGER = DATA / "logs", DATA / "events.jsonl", DATA / "ledger.jsonl"
 
     MODELS = {m["key"]: {"id": m["id"], "name": m["name"], "driver": m.get("driver", "opencode"),
-                          "role": m.get("role", ""), "trains_on_prompts": m.get("trains_on_prompts")}
+                          "role": m.get("role", ""), "trains_on_prompts": m.get("trains_on_prompts"),
+                          "agent": m.get("agent")}
               for m in CFG.get("models", [])}
     # [project] sensitive = true: only models that explicitly set trains_on_prompts = false may run
     SENSITIVE = bool(CFG.get("project", {}).get("sensitive", False))
@@ -511,8 +512,10 @@ def cmd_run(a):
         # safety (check_worktree_safety) is unchanged.
         cmd = [OPENCODE_BIN, "run", "--format", "json", "-m", model["id"],
                "--title", f"{a.phase}/{a.task}/{a.model}"]
-        if OPENCODE_AGENT:
-            cmd += ["--agent", OPENCODE_AGENT]
+        # A model's own `agent` wins over [opencode] agent: a web research model gets a read-only agent
+        agent = model.get("agent") or OPENCODE_AGENT
+        if agent:
+            cmd += ["--agent", agent]
         if a.session:
             cmd += ["-s", a.session]
         cmd.append(prompt)
