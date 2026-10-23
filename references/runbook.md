@@ -36,6 +36,13 @@ OpenCode runs cost cents.
   `for p in $PID_A $PID_B; do while kill -0 $p 2>/dev/null; do sleep 15; done; done` (record each run's pid with `$!`
   when you start it; a refused run exits without a JSON line, so waiting on the output would hang forever)
   (Bash timeout 600000 ms; run the loop again if it times out).
+- Never wait with `pgrep -f PATTERN` (or `pgrep -f` inside `until`/`while`): the loop's own shell has PATTERN in
+  its command line, so pgrep always finds the loop itself and it never ends. A manager sat 14 hours on four such
+  loops after the test run they waited on had finished. Wait on the pid (`kill -0`) recorded when you started the
+  job. If you only have a name, bracket the first letter (`pgrep -f "[r]un_all.py"`) so the pattern cannot match
+  its own text, and cap the loop with a deadline (`end=$((SECONDS+3600)); while ... && [ $SECONDS -lt $end ]`).
+- When a wait ends, check the log's timestamp is after the job's start before you trust it: a stale log from an
+  earlier run reads like a result.
 - Read only tails and greps of outputs. Never re-read a log you already read. Never cat big files.
 - Aim for fewer than 120 tool calls per phase.
 

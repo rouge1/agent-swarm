@@ -66,6 +66,7 @@ templates are the generalized version of that project's ops tooling.
 | The dashboard showed the orchestrator doing workers' fixes | Task events always carry the worker's model |
 | Dashboard database writes drifted out of version | Track `if_version` locally, with a `--resync` option |
 | `pkill -f` killed Claude's own shell | Find the pid with `ss -ltnp` or `pgrep`, then `kill <pid>` |
+| A phase manager waited 14 h on `while pgrep -f "tests/run_all.py"; do sleep 15; done`: pgrep matched the loop's own shell, so it never ended, although the run had finished | Wait on the recorded pid with `kill -0`; if only a name is known, bracket it (`"[r]un_all.py"`) and add a deadline; check the log is newer than the run's start |
 | The Chrome extension sign-in failed | Playwright (headless, scriptable, records video) |
 
 ## What I'd do better next time
