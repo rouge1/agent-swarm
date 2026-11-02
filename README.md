@@ -51,6 +51,12 @@ Or per project: copy the folder to `<project>/.claude/skills/agent-swarm/` and c
 With another orchestrator, point it at `SKILL.md` and `references/runbook.md`. They are plain markdown
 instructions, and everything else is `scripts/swarm.py`.
 
+The skill is shared and holds nothing project-specific. Each project gets its own ops folder, `swarm.toml`, copied
+agent files and (for Grok) its own sandbox profile. The checklist for a new project, and what must never be shared
+between projects, is in [`knowledge/new-project-setup.md`](knowledge/new-project-setup.md). Per-CLI setup and
+after-update checks are in [`knowledge/opencode-with-swarm.md`](knowledge/opencode-with-swarm.md) and
+[`knowledge/grok-with-swarm.md`](knowledge/grok-with-swarm.md).
+
 ## Quick start
 
     # scaffold an ops folder (swarm.toml, data/, prompts/, specs/, out/) next to your project
