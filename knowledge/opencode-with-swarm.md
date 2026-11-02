@@ -38,7 +38,7 @@ Run these in order and stop at the first failure.
 
 1. **Version:** `opencode --version`. Note it in the log below.
 2. **Ids still exist:** `opencode models` lists every `id` in your `swarm.toml`. Ids move between updates (the Muse
-   id changed twice in October 2026), and a wrong id fails only when a run starts.
+   id changed once already), and a wrong id fails only when a run starts.
 3. **Direct smoke test**, from any scratch folder, with stdin closed:
    `opencode run -m <id> "Reply with the single word: ok" < /dev/null`
 4. **Smoke test through `swarm.py`** in a throwaway repo and ops folder, never your real project. Make a folder with
