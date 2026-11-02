@@ -86,5 +86,7 @@ durable record.
 - `swarm.py run` now warns on stderr when a Grok sandbox profile is not defined or lists a path that does not exist.
   It does not check that the listed paths are the *right* ones for the project, so a profile copied from another
   project with paths that happen to exist still passes.
-- `swarm.toml.example` still names the profile `swarm-worker`. `init --grok-env` replaces it; without that flag,
-  set it yourself.
+- The code default for `[grok] sandbox` in `scripts/swarm.py` is still `swarm-worker`, and `references/grok-cli.md`
+  uses that name in its examples. A project that sets neither `--grok-env` nor its own `sandbox =` line gets a
+  profile that does not exist; Grok refuses to start and `swarm.py run` warns. Treat `swarm-worker` in those docs
+  as a placeholder name.

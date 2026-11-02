@@ -196,7 +196,9 @@ max_turns = 40
 # references/grok-cli.md, including an Ubuntu bubblewrap/AppArmor gotcha.
 # `swarm.py run` refuses to launch a Grok worker when this is empty unless
 # `allow_unsandboxed = true` below.
-sandbox = "swarm-worker"
+# Name a profile for THIS project and define it in ~/.grok/sandbox.toml (`swarm.py init --grok-env <python env>`
+# does both). Never share one profile between projects: it keeps the first project's paths.
+sandbox = "myproject-worker"
 
 # Explicitly opt in to running Grok workers with no sandbox profile at all.
 # Off by default.
