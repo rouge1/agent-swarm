@@ -61,6 +61,8 @@ after-update checks are in [`knowledge/opencode-with-swarm.md`](knowledge/openco
 
     # scaffold an ops folder (swarm.toml, data/, prompts/, specs/, out/) next to your project
     python3 scripts/swarm.py init --dir ../myapp-ops --name "My App" --repo /path/to/myapp
+    # optional: --grok-env <python env> adds a per-project Grok sandbox profile;
+    #           --agents claude / --agents opencode copies the manager, scribe and advisor agents into the repo
     # edit ../myapp-ops/swarm.toml: models, phases, forbidden dirs, prices
     python3 scripts/swarm.py --config ../myapp-ops/swarm.toml phase p0 active
     python3 scripts/swarm.py --config ../myapp-ops/swarm.toml status

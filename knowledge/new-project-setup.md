@@ -35,8 +35,18 @@ ln -s "$PWD/agent-swarm" ~/.claude/skills/agent-swarm
 
 1. **Repo:** `git init -b main` (or use the existing one) and make at least one commit, so worktrees can branch.
 2. **Folders** next to it, outside `/tmp`: `<name>` (repo), `<name>-wt` (worktrees), `<name>-ops` (ops).
-3. **Ops folder:**
-   `python3 <skill>/scripts/swarm.py init --dir <name>-ops --name "<Name>" --repo <abs path to repo>`
+3. **Ops folder.** One command does steps 3, 5 and 6; add only the flags you need:
+
+   ```
+   python3 <skill>/scripts/swarm.py init --dir <name>-ops --name "<Name>" --repo <abs path to repo> \
+     --grok-env <abs path to the project's Python env> \
+     --agents claude --agents opencode --opencode-model <provider/model>
+   ```
+
+   - `--worktrees` is optional; it defaults to `<repo>-wt`.
+   - `--grok-env` (repeatable) creates the per-project Grok profile, see step 5.
+   - `--agents` copies the manager, scribe and advisor into the repo, see step 6.
+   - It prints a `note:` line for anything it did to files outside the ops folder, or could not check.
 4. **Edit `swarm.toml`:**
    - `project.worktrees`: the `-wt` folder. Workers may only run under it.
    - `project.forbidden`: every folder that must never host a worker, including `~/.ssh` and other projects' main
@@ -45,12 +55,15 @@ ln -s "$PWD/agent-swarm" ~/.claude/skills/agent-swarm
    - `[[models]]`: 2-4 models with their `driver`. Check each id first (`opencode models`, `grok models`). Set
      `trains_on_prompts` and, for private code, `[project] sensitive = true`. See `opencode-with-swarm.md` and
      `grok-with-swarm.md`.
-5. **Grok sandbox profile, one per project** (skip if you use no Grok model). In `~/.grok/sandbox.toml`, add a
+5. **Grok sandbox profile, one per project** (skip if you use no Grok model). `init --grok-env` does this: it adds
+   `[profiles.<project-slug>-worker]` to `~/.grok/sandbox.toml`, never touches an existing profile, and sets
+   `[grok] sandbox` in `swarm.toml`. By hand, in `~/.grok/sandbox.toml`, add a
    profile named for the project (`<name>-worker`, and `<name>-review` if reviewers need different reads):
    extend `strict`, `restrict_network = true`, and under `read_only` list this project's Python env and the main
    repo's `.git`. Then set `[grok] sandbox = "<name>-worker"` in the project's `swarm.toml`. Never reuse another
    project's profile, and never edit a profile another swarm is using.
-6. **Agent files** (Claude Code and OpenCode): copy `agents/claude/*.md` to `<repo>/.claude/agents/`, and
+6. **Agent files** (Claude Code and OpenCode). `init --agents` copies them (never overwriting) and fills in the
+   OpenCode model; the `external_directory` allowances stay manual. By hand: copy `agents/claude/*.md` to `<repo>/.claude/agents/`, and
    `agents/opencode/*.md` to `<repo>/.opencode/agents/`. In the OpenCode copies, replace
    `REPLACE_WITH_PROVIDER/MODEL` and fill in the `external_directory` allowances with this project's ops, skill and
    worktree paths. These copies are project files: commit them to the project, not to the skill.
@@ -68,9 +81,10 @@ durable record.
 
 ## Known gaps
 
-- `swarm.py init` does not yet create the Grok sandbox profile or fill in the agent files. Steps 5 and 6 are manual,
-  and a missed step 5 fails quietly: the run starts on whatever profile the name points to.
-- Nothing warns when a sandbox profile's `read_only` paths do not exist, or do not match the project. Check by
-  hand against `project.repo` and the env used by `test_cmd`.
-- `swarm.toml.example` still names the profile `swarm-worker`. Rename it to the per-project form when the example
-  is next edited.
+- `init` fills in the model for the OpenCode agents but not their `external_directory` allowances for the ops dir,
+  the skill folder and `project.worktrees`; it prints a reminder.
+- `swarm.py run` now warns on stderr when a Grok sandbox profile is not defined or lists a path that does not exist.
+  It does not check that the listed paths are the *right* ones for the project, so a profile copied from another
+  project with paths that happen to exist still passes.
+- `swarm.toml.example` still names the profile `swarm-worker`. `init --grok-env` replaces it; without that flag,
+  set it yourself.

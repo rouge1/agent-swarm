@@ -486,6 +486,9 @@ def cmd_run(a):
                  "itself; log their runs with `swarm.py log-run`")
     if driver == "grok" and not GROK_SANDBOX and not GROK_ALLOW_UNSANDBOXED:
         sys.exit("grok driver needs a sandbox profile; set [grok] sandbox or allow_unsandboxed = true")
+    if driver == "grok" and GROK_SANDBOX:
+        for problem in sandbox_profile_problems(GROK_SANDBOX):
+            print(f"warning: {problem}", file=sys.stderr)
     kind = a.kind or ("fix" if a.session else "build")
     emit({"type": "task", "phase": a.phase, "task": a.task, "model": a.model,
           "status": "fixing" if kind == "fix" else "working"})
@@ -716,6 +719,37 @@ def cmd_score(a):
 # ---------------------------------------------------------------- init / worktrees
 
 
+GROK_BUILTIN_PROFILES = {"workspace", "devbox", "read-only", "strict"}
+
+
+def _slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "project"
+
+
+def _grok_sandbox_file() -> Path:
+    return Path(os.environ.get("GROK_SANDBOX_FILE") or Path.home() / ".grok" / "sandbox.toml")
+
+
+def sandbox_profile_problems(profile: str) -> list[str]:
+    """Problems with a Grok sandbox profile: not defined, or listing paths that don't exist on this machine.
+
+    Built-in profiles are never checked. A profile shared between projects is the usual source: it keeps
+    another project's paths, and Grok starts anyway.
+    """
+    if profile in GROK_BUILTIN_PROFILES:
+        return []
+    path = _grok_sandbox_file()
+    try:
+        prof = tomllib.loads(path.read_text()).get("profiles", {}).get(profile)
+    except (OSError, tomllib.TOMLDecodeError):
+        prof = None
+    if prof is None:
+        return [f"sandbox profile '{profile}' is not defined in {path}"]
+    return [f"sandbox profile '{profile}' lists a path that does not exist: {p}"
+            for p in prof.get("read_only", []) + prof.get("read_write", [])
+            if not Path(p).expanduser().exists()]
+
+
 def cmd_init(a):
     """Scaffold a fresh ops directory: swarm.toml (from the packaged example) + data/out/prompts/specs."""
     target = Path(a.dir).resolve() if a.dir else Path.cwd()
@@ -729,6 +763,28 @@ def cmd_init(a):
     text = example.read_text()
     text = _patch_toml_scalar(text, "project", "name", a.name)
     text = _patch_toml_scalar(text, "project", "repo", a.repo)
+    repo_path = Path(a.repo).expanduser()
+    text = _patch_toml_scalar(text, "project", "worktrees", a.worktrees or f"{str(repo_path).rstrip('/')}-wt")
+
+    notes = []
+    if not repo_path.is_dir():
+        notes.append(f"project.repo does not exist yet: {repo_path}")
+    grok_profile = a.grok_profile or (f"{_slug(a.name)}-worker" if a.grok_env else None)
+    if grok_profile:
+        text = _patch_toml_scalar(text, "grok", "sandbox", grok_profile)
+        sb = _grok_sandbox_file()
+        existing = sb.read_text() if sb.is_file() else ""
+        if re.search(rf"(?m)^\[profiles\.{re.escape(grok_profile)}\]", existing):
+            notes.append(f"sandbox profile '{grok_profile}' already exists in {sb}; left unchanged")
+        else:
+            read_only = [*a.grok_env, f"{str(repo_path).rstrip('/')}/.git"]
+            block = (f"\n# {a.name}: added by `swarm.py init`. Per-project on purpose; do not share with another swarm.\n"
+                     f"[profiles.{grok_profile}]\nextends = \"strict\"\nrestrict_network = true\n"
+                     "read_only = [\n" + "".join(f'  "{p}",\n' for p in read_only) + "]\n")
+            sb.parent.mkdir(parents=True, exist_ok=True)
+            sb.write_text(existing + block)
+            notes.append(f"added sandbox profile '{grok_profile}' to {sb}")
+        notes += sandbox_profile_problems(grok_profile)
     target.mkdir(parents=True, exist_ok=True)
     cfg_path.write_text(text)
 
@@ -748,7 +804,31 @@ def cmd_init(a):
             dest.write_text(f.read_text())
             copied.append(dest.name)
 
+    for kind in a.agents:
+        src = SKILL_DIR / "agents" / kind
+        dest_dir = repo_path / (".claude/agents" if kind == "claude" else ".opencode/agents")
+        done = []
+        for f in sorted(src.glob("*.md")):
+            if f.name == "swarm-research.md":  # lives in ~/.config/opencode/agents, see references/opencode-cli.md
+                continue
+            dest = dest_dir / f.name
+            if dest.exists():
+                continue
+            body = f.read_text()
+            if kind == "opencode" and a.opencode_model:
+                body = body.replace("REPLACE_WITH_PROVIDER/MODEL", a.opencode_model)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest.write_text(body)
+            done.append(f.name)
+        notes.append(f"copied {kind} agents to {dest_dir}: {', '.join(done) or 'none new'}")
+        if kind == "opencode":
+            notes.append("OpenCode agents still need external_directory allowances for the ops dir, the skill "
+                         "folder and project.worktrees" + ("" if a.opencode_model else
+                         ", and a model in place of REPLACE_WITH_PROVIDER/MODEL"))
+
     print(f"wrote {cfg_path}")
+    for n in notes:
+        print(f"  note: {n}")
     for sub in made:
         print(f"  {target / sub}")
     if copied:
@@ -1597,6 +1677,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--dir", help="where to scaffold (default: current directory)")
     s.add_argument("--name", required=True, help="project.name")
     s.add_argument("--repo", required=True, help="project.repo (absolute path to the main checkout)")
+    s.add_argument("--worktrees", help="project.worktrees (default: <repo>-wt)")
+    s.add_argument("--grok-env", action="append", default=[], metavar="PATH",
+                   help="a path the project's tests must read (its Python env); repeatable. Creates a per-project "
+                        "Grok sandbox profile in ~/.grok/sandbox.toml and points [grok] sandbox at it")
+    s.add_argument("--grok-profile", help="name for that profile (default: <project-slug>-worker)")
+    s.add_argument("--agents", action="append", default=[], choices=["claude", "opencode"],
+                   help="copy the manager/scribe/advisor agents into <repo>/.claude/agents or .opencode/agents")
+    s.add_argument("--opencode-model", help="provider/model to fill into the copied OpenCode agents")
     s.set_defaults(fn=cmd_init)
 
     r = sub.add_parser("run")
